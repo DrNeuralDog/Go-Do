@@ -55,13 +55,13 @@ func NewTimeline(dataManager *persistence.MonthlyManager) *Timeline {
 // SetDate sets the current viewing date
 func (t *Timeline) SetDate(date *utils.CustomDate) {
 	t.currentDate = date
-	t.Refresh()
+	// Don't auto-refresh - let caller control when to refresh
 }
 
 // SetViewMode sets the current view mode
 func (t *Timeline) SetViewMode(mode models.ViewMode) {
 	t.viewMode = mode
-	t.Refresh()
+	// Don't auto-refresh - let caller control when to refresh
 }
 
 // SetTodos updates the todos and refreshes the display
@@ -70,7 +70,7 @@ func (t *Timeline) SetTodos(todos []*models.TodoItem) {
 	t.todos = todos
 	t.organizeByDate()
 	fmt.Printf("[Timeline.SetTodos] After organize: %d visible items, %d date groups\n", len(t.visibleItems), len(t.dateGroups))
-	t.Refresh()
+	// Don't auto-refresh - let caller control when to refresh
 }
 
 // organizeByDate groups todos by date for display
@@ -132,12 +132,9 @@ func (r *timelineRenderer) Layout(size fyne.Size) {
 }
 
 func (r *timelineRenderer) MinSize() fyne.Size {
-	var minSize fyne.Size
-	if r.scroll != nil {
-		minSize = r.scroll.MinSize()
-	} else {
-		minSize = fyne.NewSize(200, 200)
-	}
+	// Always return a reasonable minimum size to prevent UI shrinking
+	// The scroll container's MinSize of {32 32} is too small and causes layout issues
+	minSize := fyne.NewSize(350, 200)
 	fmt.Printf("[Timeline.MinSize] Returning: %v (scroll exists: %v)\n", minSize, r.scroll != nil)
 	return minSize
 }

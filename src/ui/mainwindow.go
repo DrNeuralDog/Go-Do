@@ -298,28 +298,16 @@ func (mw *MainWindow) refreshView() {
 	// Update view mode button
 	mw.viewModeBtn.SetText(mw.viewMode.GetLabel())
 
-	// Update timeline
+	// Update timeline data (without triggering refresh yet)
 	fmt.Printf("[MainWindow.refreshView] Timeline size before update: %v\n", mw.timeline.Size())
 	mw.timeline.SetDate(mw.currentDate)
 	mw.timeline.SetViewMode(mw.viewMode)
 	mw.timeline.SetTodos(mw.todos)
 	fmt.Printf("[MainWindow.refreshView] Timeline size after SetTodos: %v\n", mw.timeline.Size())
+
+	// Single refresh at the end to avoid multiple layout recalculations
 	mw.timeline.Refresh()
 
-	// Force full window layout refresh to prevent UI shrinking bug
-	if mw.window.Canvas() != nil {
-		canvas := mw.window.Canvas()
-		content := mw.window.Content()
-		if content != nil {
-			fmt.Printf("[MainWindow.refreshView] Window content size: %v\n", content.Size())
-			// Force a complete relayout of the window content
-			canvas.Refresh(content)
-			// Trigger layout recalculation
-			content.Resize(content.Size())
-			content.Refresh()
-			fmt.Printf("[MainWindow.refreshView] Window content size after refresh: %v\n", content.Size())
-		}
-	}
 	fmt.Printf("[MainWindow.refreshView] ===== END =====\n\n")
 }
 
