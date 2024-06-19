@@ -175,8 +175,6 @@ func (mw *MainWindow) setupUI() {
 		models.ViewComplete.GetLabel(),
 		models.ViewStarred.GetLabel(),
 	}, func(value string) {
-		fmt.Printf("\n[ViewModeSelect.OnChanged] ********** VIEW MODE CHANGED **********\n")
-		fmt.Printf("[ViewModeSelect.OnChanged] New value: %s\n", value)
 		switch value {
 		case models.ViewAll.GetLabel():
 			mw.viewMode = models.ViewAll
@@ -187,11 +185,8 @@ func (mw *MainWindow) setupUI() {
 		case models.ViewStarred.GetLabel():
 			mw.viewMode = models.ViewStarred
 		}
-		fmt.Printf("[ViewModeSelect.OnChanged] Calling loadTodos()...\n")
 		mw.loadTodos()
-		fmt.Printf("[ViewModeSelect.OnChanged] Calling refreshView()...\n")
 		mw.refreshView()
-		fmt.Printf("[ViewModeSelect.OnChanged] ********** DONE **********\n\n")
 	})
 	mw.viewModeSel.SetSelected(models.ViewAll.GetLabel())
 
@@ -293,9 +288,6 @@ func (mw *MainWindow) loadTodos() {
 
 // refreshView updates the UI display
 func (mw *MainWindow) refreshView() {
-	fmt.Printf("\n[MainWindow.refreshView] ===== START =====\n")
-	fmt.Printf("[MainWindow.refreshView] ViewMode: %s, Todos count: %d\n", mw.viewMode.GetLabel(), len(mw.todos))
-
 	// Update title
 	titleText := fmt.Sprintf("%s - %d/%02d - %s",
 		localization.GetString("window_title"), mw.currentDate.Year, mw.currentDate.Month, mw.viewMode.GetLabel())
@@ -304,27 +296,16 @@ func (mw *MainWindow) refreshView() {
 	// Update view mode button
 	mw.viewModeBtn.SetText(mw.viewMode.GetLabel())
 
-	// Store current window content size before any updates
-	var targetSize fyne.Size
-	if content := mw.window.Content(); content != nil {
-		targetSize = content.Size()
-		fmt.Printf("[MainWindow.refreshView] Stored window content size: %v\n", targetSize)
-	}
-
 	// Update timeline data (without triggering refresh yet)
-	fmt.Printf("[MainWindow.refreshView] Timeline size before update: %v\n", mw.timeline.Size())
 	mw.timeline.SetDate(mw.currentDate)
 	mw.timeline.SetViewMode(mw.viewMode)
 	mw.timeline.SetTodos(mw.todos)
-	fmt.Printf("[MainWindow.refreshView] Timeline size after SetTodos: %v\n", mw.timeline.Size())
 
 	// Single refresh at the end to avoid multiple layout recalculations
 	mw.timeline.Refresh()
 
 	// DO NOT call content.Refresh() here! It triggers async layout recalculation
 	// that causes the UI to shrink. Timeline already refreshed itself above.
-
-	fmt.Printf("[MainWindow.refreshView] ===== END =====\n\n")
 }
 
 // Event handlers

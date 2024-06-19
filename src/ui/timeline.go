@@ -66,10 +66,8 @@ func (t *Timeline) SetViewMode(mode models.ViewMode) {
 
 // SetTodos updates the todos and refreshes the display
 func (t *Timeline) SetTodos(todos []*models.TodoItem) {
-	fmt.Printf("[Timeline.SetTodos] Called with %d todos\n", len(todos))
 	t.todos = todos
 	t.organizeByDate()
-	fmt.Printf("[Timeline.SetTodos] After organize: %d visible items, %d date groups\n", len(t.visibleItems), len(t.dateGroups))
 	// Don't auto-refresh - let caller control when to refresh
 }
 
@@ -119,42 +117,31 @@ type timelineRenderer struct {
 }
 
 func (r *timelineRenderer) Layout(size fyne.Size) {
-	fmt.Printf("[Timeline.Layout] Called with size: %v\n", size)
 	if r.scroll == nil {
 		// Initialize scroll if not already done
 		content := r.createTimelineContent()
 		r.scroll = container.NewScroll(content)
-		fmt.Printf("[Timeline.Layout] Created new scroll container\n")
 	}
 	// Ensure scroll fills all available area
 	r.scroll.Resize(size)
-	fmt.Printf("[Timeline.Layout] Resized scroll to: %v\n", size)
 }
 
 func (r *timelineRenderer) MinSize() fyne.Size {
 	// Always return a reasonable minimum size to prevent UI shrinking
 	// The scroll container's MinSize of {32 32} is too small and causes layout issues
-	minSize := fyne.NewSize(350, 200)
-	fmt.Printf("[Timeline.MinSize] Returning: %v (scroll exists: %v)\n", minSize, r.scroll != nil)
-	return minSize
+	return fyne.NewSize(350, 200)
 }
 
 func (r *timelineRenderer) Refresh() {
-	fmt.Printf("[Timeline.Refresh] Starting refresh, timeline size: %v\n", r.timeline.Size())
-
 	// Store current scroll position
 	var offset fyne.Position
 	if r.scroll != nil {
 		offset = r.scroll.Offset
-		fmt.Printf("[Timeline.Refresh] Storing scroll offset: %v\n", offset)
 	}
 
 	// Recreate scroll container entirely to avoid layout bugs
 	content := r.createTimelineContent()
-	fmt.Printf("[Timeline.Refresh] Created new content with %d visible items\n", len(r.timeline.visibleItems))
-
 	r.scroll = container.NewScroll(content)
-	fmt.Printf("[Timeline.Refresh] Created new scroll container, MinSize: %v\n", r.scroll.MinSize())
 
 	// Restore scroll position
 	r.scroll.Offset = offset
@@ -162,9 +149,6 @@ func (r *timelineRenderer) Refresh() {
 	// Ensure proper sizing
 	if size := r.timeline.Size(); size.Width > 0 && size.Height > 0 {
 		r.scroll.Resize(size)
-		fmt.Printf("[Timeline.Refresh] Resized scroll to: %v\n", size)
-	} else {
-		fmt.Printf("[Timeline.Refresh] WARNING: Timeline has invalid size: %v\n", size)
 	}
 }
 
