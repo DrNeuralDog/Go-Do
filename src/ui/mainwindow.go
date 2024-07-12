@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
+	assets "todo-list-migration/doc"
 	"todo-list-migration/src/localization"
 	"todo-list-migration/src/models"
 	"todo-list-migration/src/persistence"
 	"todo-list-migration/src/ui/forms"
-	"todo-list-migration/src/utils"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -36,13 +36,14 @@ type MainWindow struct {
 	viewModeBtn *widget.Button // legacy hidden
 	themeBtn    *widget.Button // legacy hidden
 	// Styled controls
-	dropdownBtn  *SimpleRectButton
-	prevRectBtn  *SimpleRectButton
-	nextRectBtn  *SimpleRectButton
-	themeRectBtn *SimpleRectButton
+	dropdownBtn     *SimpleRectButton
+	prevRectBtn     *SimpleRectButton
+	nextRectBtn     *SimpleRectButton
+	pomodoroRectBtn *SimpleRectButton
+	themeRectBtn    *SimpleRectButton
 
 	// State
-	currentDate *utils.CustomDate
+	currentDate time.Time // Changed to time.Time for daily view
 	viewMode    models.ViewMode
 	todos       []*models.TodoItem
 	isGruvbox   bool
@@ -53,12 +54,12 @@ func NewMainWindow(window fyne.Window, dataDir string) *MainWindow {
 	mw := &MainWindow{
 		window:      window,
 		dataManager: persistence.NewMonthlyManager(dataDir),
-		currentDate: utils.GetCurrentDate(),
+		currentDate: time.Now(), // Start with today
 		viewMode:    models.ViewIncomplete,
 		isGruvbox:   false,
 	}
 
-	// Try to find existing data file and set currentDate accordingly
+	// Find and set to latest day with data
 	mw.findAndSetCurrentDateFromDataFile()
 
 	// Initialize todo form
@@ -75,74 +76,51 @@ func NewMainWindow(window fyne.Window, dataDir string) *MainWindow {
 	return mw
 }
 
-// findAndSetCurrentDateFromDataFile looks for existing data files and sets currentDate to match
+// findAndSetCurrentDateFromDataFile looks for existing data files and sets currentDate to the latest day with todos
 func (mw *MainWindow) findAndSetCurrentDateFromDataFile() {
 	dataDir := mw.dataManager.GetDataDir()
 
-	// Look for data files in the format YYYYMM.yaml (preferred) or YYYYMM.txt
+	// Look for data files
 	entries, err := os.ReadDir(dataDir)
 	if err != nil {
 		return // Use current date if we can't read the directory
 	}
 
-	var latestFile string
-	var latestYear, latestMonth int
-	// first pass gather YAML months
-	yamlMonths := make(map[string]struct{})
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		if strings.HasSuffix(entry.Name(), ".yaml") {
-			filename := strings.TrimSuffix(entry.Name(), ".yaml")
-			if len(filename) == 6 {
-				if _, err := strconv.Atoi(filename); err == nil {
-					yamlMonths[filename] = struct{}{}
-				}
-			}
-		}
-	}
-
+	var latestTime time.Time
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
 		}
 		name := entry.Name()
-		isYAML := strings.HasSuffix(name, ".yaml")
-		isTXT := strings.HasSuffix(name, ".txt")
-		if !isYAML && !isTXT {
+		if !strings.HasSuffix(name, ".yaml") && !strings.HasSuffix(name, ".txt") {
 			continue
 		}
-		var filename string
-		if isYAML {
-			filename = strings.TrimSuffix(name, ".yaml")
-		} else {
-			filename = strings.TrimSuffix(name, ".txt")
-		}
+		filename := strings.TrimSuffix(strings.TrimSuffix(name, ".yaml"), ".txt")
 		if len(filename) != 6 {
 			continue
 		}
-		yearStr := filename[:4]
-		monthStr := filename[4:]
-		year, err1 := strconv.Atoi(yearStr)
-		month, err2 := strconv.Atoi(monthStr)
+		year, err1 := strconv.Atoi(filename[:4])
+		month, err2 := strconv.Atoi(filename[4:])
 		if err1 != nil || err2 != nil || month < 1 || month > 12 {
 			continue
 		}
-		// prefer YAML when both exist
-		if _, hasYAML := yamlMonths[filename]; !isYAML && hasYAML {
+
+		// Load todos for this month
+		todos, err := mw.dataManager.GetTodosForMonth(year, month)
+		if err != nil {
 			continue
 		}
-		if latestFile == "" || year > latestYear || (year == latestYear && month > latestMonth) {
-			latestFile = name
-			latestYear = year
-			latestMonth = month
+
+		// Find the latest todo time in this month
+		for _, todo := range todos {
+			if todo.TodoTime.After(latestTime) {
+				latestTime = todo.TodoTime
+			}
 		}
 	}
 
-	// If we found a valid data file, set currentDate to match
-	if latestFile != "" {
-		mw.currentDate = utils.NewCustomDateFromValues(latestYear, latestMonth, 1, 0, 0, 0)
+	if !latestTime.IsZero() {
+		mw.currentDate = latestTime
 	}
 }
 
@@ -165,16 +143,16 @@ func (mw *MainWindow) setupUI() {
 	mw.addButton.Importance = widget.HighImportance
 
 	// Legacy hidden controls for compatibility
-	mw.prevButton = widget.NewButtonWithIcon("", theme.NavigateBackIcon(), mw.onPrevMonthClicked)
+	mw.prevButton = widget.NewButtonWithIcon("", theme.NavigateBackIcon(), mw.onPrevDayClicked)
 	mw.prevButton.Hide()
-	mw.nextButton = widget.NewButtonWithIcon("", theme.NavigateNextIcon(), mw.onNextMonthClicked)
+	mw.nextButton = widget.NewButtonWithIcon("", theme.NavigateNextIcon(), mw.onNextDayClicked)
 	mw.nextButton.Hide()
 	mw.viewModeBtn = widget.NewButton(mw.viewMode.GetLabel(), mw.onViewModeClicked)
 	mw.viewModeBtn.Hide()
 	mw.themeBtn = widget.NewButton("Gruvbox", mw.onThemeToggleClicked)
 	mw.themeBtn.Hide()
 
-	// --- Background gradient for the whole app area + header/logo/title ---
+	// --- Get gradient colors from current theme (used as full-window background) ---
 	// Get gradient colors from current theme
 	var startColor, endColor color.Color
 	currentTheme := fyne.CurrentApp().Settings().Theme()
@@ -188,49 +166,53 @@ func (mw *MainWindow) setupUI() {
 		endColor = startColor
 	}
 
-	// Logo: circular outline with checkmark - 54x54px from mockup
-	logoCircle := canvas.NewCircle(color.NRGBA{R: 0, G: 0, B: 0, A: 0})
-	// stroke/text color depends on theme
-	var logoStroke color.Color
-	var logoTextColor color.Color
+	// Themed header icon from embedded assets and bottom-aligned with title
+	var titleColor color.Color
+	var logoRes fyne.Resource
 	if _, ok := currentTheme.(*LightSoftTheme); ok {
-		logoStroke = color.White
-		logoTextColor = color.White
+		titleColor = color.White
+		logoRes = assets.HeaderIconLight
 	} else {
-		// Gruvbox: use bright yellow accent for both
-		logoStroke = hex("#fabd2f")
-		logoTextColor = hex("#fabd2f")
+		titleColor = hex("#fabd2f")
+		logoRes = assets.HeaderIconDark
 	}
-	logoCircle.StrokeColor = logoStroke
-	logoCircle.StrokeWidth = 3
-	logoTxt := canvas.NewText("✓", logoTextColor)
-	logoTxt.TextSize = 26 // Increased for 54px circle
-	logoTxt.TextStyle = fyne.TextStyle{Bold: true}
-	logo := container.NewGridWrap(fyne.NewSize(54, 54), container.NewMax(logoCircle, container.NewCenter(logoTxt)))
+    logoImg := canvas.NewImageFromResource(logoRes)
+    logoImg.FillMode = canvas.ImageFillContain
+    // Make icon ~3x larger than before (54 -> 162) and hard-anchor to bottom
+    logoSize := float32(162)
+    // inner grid ensures non-zero MinSize for the bottom area
+    inner := container.NewGridWrap(fyne.NewSize(logoSize, logoSize), container.NewMax(logoImg))
+    logo := container.NewGridWrap(fyne.NewSize(logoSize, logoSize), container.NewBorder(nil, inner, nil, nil, nil))
 
-	// Title text - 56px from mockup with letter-spacing (simulated via text size)
-	titleTxt := canvas.NewText("GO DO", color.White)
+	// Title text - 56px from mockup
+	titleTxt := canvas.NewText("GO DO", titleColor)
 	titleTxt.TextSize = 56                           // From mockup
 	titleTxt.TextStyle = fyne.TextStyle{Bold: false} // Weight 300 in mockup = light, use normal
+	// Bottom-align title inside a row of height logoSize by adding top padding
+	titlePad := logoSize - titleTxt.TextSize
+	if titlePad < 0 {
+		titlePad = 0
+	}
+	titleAligned := container.NewBorder(CreateSpacer(1, titlePad), nil, nil, nil, titleTxt)
 
-	header := container.NewHBox(logo, CreateSpacer(20, 1), titleTxt)
+	header := container.NewHBox(logo, CreateSpacer(20, 1), titleAligned)
 
-	// --- Controls row: [Dropdown (cycle)] [←] [→] [Theme] --- strictly per mockup
-	var dropdownBg, dropdownFg, navBg, navFg, themeBg, themeFg color.Color
+	// --- Controls row: [Dropdown (cycle)] [←] [→] [Pomodoro] ---
+	var dropdownBg, dropdownFg, navBg, navFg, pomodoroBg, pomodoroFg color.Color
 	if _, ok := currentTheme.(*LightSoftTheme); ok {
 		dropdownBg = hex("#ffffff")
 		dropdownFg = hex("#3c3836")
 		navBg = hex("#ff8c42")
 		navFg = color.White
-		themeBg = hex("#ff8c42")
-		themeFg = color.White
+		pomodoroBg = hex("#ff8c42")
+		pomodoroFg = color.White
 	} else {
 		dropdownBg = hex("#3c3836")
 		dropdownFg = hex("#ebdbb2")
 		navBg = hex("#504945")
 		navFg = hex("#fabd2f")
-		themeBg = hex("#504945")
-		themeFg = hex("#fabd2f")
+		pomodoroBg = hex("#504945")
+		pomodoroFg = hex("#fabd2f")
 	}
 
 	// Dropdown cycles through modes on tap
@@ -239,18 +221,11 @@ func (mw *MainWindow) setupUI() {
 		mw.dropdownBtn.SetText(mw.viewMode.GetLabel() + " ▼")
 	})
 
-	mw.prevRectBtn = NewSimpleRectButton("←", navBg, navFg, fyne.NewSize(44, 44), 8, mw.onPrevMonthClicked)
-	mw.nextRectBtn = NewSimpleRectButton("→", navBg, navFg, fyne.NewSize(44, 44), 8, mw.onNextMonthClicked)
+	mw.prevRectBtn = NewSimpleRectButton("←", navBg, navFg, fyne.NewSize(44, 44), 8, mw.onPrevDayClicked)
+	mw.nextRectBtn = NewSimpleRectButton("→", navBg, navFg, fyne.NewSize(44, 44), 8, mw.onNextDayClicked)
 
-	// Theme toggle shows current target
-	themeLabel := "Dark"
-	if mw.isGruvbox {
-		themeLabel = "Light"
-	} else {
-		// current is light by default, button shows Dark
-		themeLabel = "Dark"
-	}
-	mw.themeRectBtn = NewSimpleRectButton(themeLabel, themeBg, themeFg, fyne.NewSize(100, 44), 8, mw.onThemeToggleClicked)
+	// Pomodoro button
+	mw.pomodoroRectBtn = NewSimpleRectButton("Pomodoro", pomodoroBg, pomodoroFg, fyne.NewSize(100, 44), 8, mw.onPomodoroTopClicked)
 
 	controls := container.NewHBox(
 		mw.dropdownBtn,
@@ -259,7 +234,7 @@ func (mw *MainWindow) setupUI() {
 		CreateSpacer(10, 1),
 		mw.nextRectBtn,
 		CreateSpacer(10, 1),
-		mw.themeRectBtn,
+		mw.pomodoroRectBtn,
 	)
 
 	// Set up timeline with current date and view mode
@@ -273,29 +248,39 @@ func (mw *MainWindow) setupUI() {
 	controlsPadded := container.NewBorder(nil, nil, CreateSpacer(24, 1), CreateSpacer(24, 1), controls)
 	timelinePadded := container.NewBorder(nil, nil, CreateSpacer(24, 1), CreateSpacer(24, 1), timelineCard)
 
-	appBody := container.NewVBox(
+	// Build header section (fixed at top)
+	headerArea := container.NewVBox(
 		CreateSpacer(1, 30),
 		headerPadded,
-		CreateSpacer(1, 14),
+		CreateSpacer(1, 25),
 		controlsPadded,
 		CreateSpacer(1, 20),
-		timelinePadded,
+	)
+	topSection := headerArea
+
+	// Use Border layout to make timeline fill remaining space, with bottom margin for add button
+	appBody := container.NewBorder(
+		topSection,          // top: header + controls
+		CreateSpacer(1, 24), // bottom: 24px margin (space for add button which floats)
+		nil, nil,            // left, right
+		timelinePadded, // center: timeline fills remaining vertical space
 	)
 
-	// Floating add button at bottom-center (60x60px from mockup)
-	addButtonRounded := RoundedIconButton(theme.ContentAddIcon(), mw.onAddButtonClicked)
-	addWrap := container.NewGridWrap(fyne.NewSize(60, 60), addButtonRounded)
+	// Bottom buttons (add button in center, pomodoro on right)
+	addButtonWithMargin := mw.setupBottomButtons()
 
-	// Full-window background gradient per mockup
-	background := NewGradientRect(startColor, endColor, 0)
-	// Stack gradient behind content
+	// Content stack - NO PADDING to avoid gaps
 	content := container.NewBorder(
 		nil,
-		container.NewCenter(addWrap), // Centered at bottom per mockup
+		addButtonWithMargin, // Add button with margin at bottom
 		nil, nil,
-		container.NewPadded(appBody),
+		appBody,
 	)
-	mw.window.SetContent(container.NewMax(background, content))
+
+	// Full-window background gradient
+	background := NewGradientRect(startColor, endColor, 0)
+	finalContent := container.NewMax(background, content)
+	mw.window.SetContent(finalContent)
 }
 
 func (mw *MainWindow) onThemeToggleClicked() {
@@ -313,41 +298,38 @@ func (mw *MainWindow) onThemeToggleClicked() {
 	mw.refreshView()
 }
 
-// loadTodos loads todos for the current month
+// loadTodos loads todos for the current day
 func (mw *MainWindow) loadTodos() {
-	todos, err := mw.dataManager.GetTodosForMonth(mw.currentDate.Year, mw.currentDate.Month)
+	year, month := mw.currentDate.Year(), int(mw.currentDate.Month())
+
+	// Load all todos for the month
+	monthlyTodos, err := mw.dataManager.GetTodosForMonth(year, month)
 	if err != nil {
-		// For now, just log the error. In a real app, you'd show a user-friendly message
-		msg := localization.GetStringWithArgs("error_load_failed", err.Error())
-		fmt.Println(msg)
-		todos = []*models.TodoItem{}
+		fmt.Println(localization.GetStringWithArgs("error_load_failed", err.Error()))
+		mw.todos = []*models.TodoItem{}
+		return
 	}
 
-	// Filter based on current view mode
+	// Filter for the current day and view mode
 	currentTime := time.Now()
-	mw.todos = mw.viewMode.FilterItems(todos, currentTime)
+	var dailyTodos []*models.TodoItem
+	startOfDay := time.Date(mw.currentDate.Year(), mw.currentDate.Month(), mw.currentDate.Day(), 0, 0, 0, 0, mw.currentDate.Location())
+	endOfDay := startOfDay.Add(24 * time.Hour)
+	for _, todo := range monthlyTodos {
+		if todo.TodoTime.After(startOfDay) && todo.TodoTime.Before(endOfDay) {
+			dailyTodos = append(dailyTodos, todo)
+		}
+	}
+	mw.todos = mw.viewMode.FilterItems(dailyTodos, currentTime)
 }
 
 // refreshView updates the UI display
 func (mw *MainWindow) refreshView() {
-	// Update title
-	titleText := fmt.Sprintf("%s - %d/%02d - %s",
-		localization.GetString("window_title"), mw.currentDate.Year, mw.currentDate.Month, mw.viewMode.GetLabel())
-	mw.titleLabel.SetText(titleText)
-
-	// Update view mode button
-	mw.viewModeBtn.SetText(mw.viewMode.GetLabel())
-
-	// Update timeline data (without triggering refresh yet)
-	mw.timeline.SetDate(mw.currentDate)
+	// Update timeline data
+	mw.timeline.SetDate(mw.currentDate) // Now passes full time.Time
 	mw.timeline.SetViewMode(mw.viewMode)
 	mw.timeline.SetTodos(mw.todos)
-
-	// Single refresh at the end to avoid multiple layout recalculations
 	mw.timeline.Refresh()
-
-	// DO NOT call content.Refresh() here! It triggers async layout recalculation
-	// that causes the UI to shrink. Timeline already refreshed itself above.
 }
 
 // Event handlers
@@ -360,14 +342,14 @@ func (mw *MainWindow) onAddButtonClicked() {
 	})
 }
 
-func (mw *MainWindow) onPrevMonthClicked() {
-	mw.currentDate.ToLastMonth()
+func (mw *MainWindow) onPrevDayClicked() {
+	mw.currentDate = mw.currentDate.AddDate(0, 0, -1)
 	mw.loadTodos()
 	mw.refreshView()
 }
 
-func (mw *MainWindow) onNextMonthClicked() {
-	mw.currentDate.ToNextMonth()
+func (mw *MainWindow) onNextDayClicked() {
+	mw.currentDate = mw.currentDate.AddDate(0, 0, 1)
 	mw.loadTodos()
 	mw.refreshView()
 }
@@ -387,4 +369,58 @@ func (mw *MainWindow) onTodoSelected(todo *models.TodoItem, todoTime time.Time) 
 		mw.loadTodos()
 		mw.refreshView()
 	})
+}
+
+// setupBottomButtons creates the bottom button layout with add and theme buttons
+func (mw *MainWindow) setupBottomButtons() fyne.CanvasObject {
+	// Get theme colors
+	currentTheme := fyne.CurrentApp().Settings().Theme()
+	var themeBg, themeFg color.Color
+	if _, ok := currentTheme.(*LightSoftTheme); ok {
+		themeBg = hex("#ff8c42")
+		themeFg = color.White
+	} else {
+		themeBg = hex("#504945")
+		themeFg = hex("#fabd2f")
+	}
+
+	// Add button on the left-center (60x60px)
+	addButtonRounded := RoundedIconButton(theme.ContentAddIcon(), mw.onAddButtonClicked)
+	addWrap := container.NewGridWrap(fyne.NewSize(55, 55), addButtonRounded)
+
+	// Theme toggle button on the right (with text)
+	themeLabel := "Dark"
+	if mw.isGruvbox {
+		themeLabel = "Light"
+	} else {
+		themeLabel = "Dark"
+	}
+
+	// Create theme button as SimpleRectButton
+	mw.themeRectBtn = NewSimpleRectButton(themeLabel, themeBg, themeFg, fyne.NewSize(100, 44), 8, mw.onThemeToggleClicked)
+	themeWrap := container.NewVBox(
+		CreateSpacer(1, 8), // Add small spacer to align with add button
+		mw.themeRectBtn,
+	)
+
+	// Create bottom button layout: add on left-center, theme on right with padding
+	bottomButtons := container.NewBorder(
+		nil, nil,
+		container.NewBorder(nil, nil, CreateSpacer(25, 1), nil, addWrap),   // 20px left margin
+		container.NewBorder(nil, nil, nil, CreateSpacer(25, 1), themeWrap), // 20px right margin
+		canvas.NewRectangle(color.Transparent),                             // center placeholder
+	)
+
+	// Place spacer BELOW the buttons to lift them up from the bottom edge
+	return container.NewVBox(
+		bottomButtons,
+		CreateSpacer(1, 10),
+	)
+}
+
+// onPomodoroTopClicked handles the top pomodoro button click
+func (mw *MainWindow) onPomodoroTopClicked() {
+	// Create and show pomodoro window
+	pomodoroWindow := NewPomodoroWindow(fyne.CurrentApp(), mw.isGruvbox)
+	pomodoroWindow.Show()
 }

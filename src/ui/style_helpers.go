@@ -1,13 +1,16 @@
 package ui
 
 import (
-	"image/color"
+    "fmt"
+    "image/color"
+    "strconv"
 
-	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/canvas"
-	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/theme"
-	"fyne.io/fyne/v2/widget"
+    "fyne.io/fyne/v2"
+    "fyne.io/fyne/v2/canvas"
+    "fyne.io/fyne/v2/container"
+    "fyne.io/fyne/v2/dialog"
+    "fyne.io/fyne/v2/theme"
+    "fyne.io/fyne/v2/widget"
 )
 
 // CreateSpacer returns an invisible spacer with fixed size.
@@ -28,7 +31,7 @@ func CreateChipStyle(obj fyne.CanvasObject) fyne.CanvasObject {
 
 	// Optional subtle border using separator color
 	sep := toNRGBA(theme.Color(theme.ColorNameSeparator))
-	sep.A = 140
+	sep.A = 255 // Full opacity for visibility
 	bg.StrokeColor = sep
 	bg.StrokeWidth = 1
 
@@ -41,7 +44,7 @@ func CreateCardStyle(obj fyne.CanvasObject) fyne.CanvasObject {
 	bg.CornerRadius = 12
 
 	sep := toNRGBA(theme.Color(theme.ColorNameSeparator))
-	sep.A = 160
+	sep.A = 255 // Full opacity for visibility
 	bg.StrokeColor = sep
 	bg.StrokeWidth = 1
 
@@ -50,18 +53,45 @@ func CreateCardStyle(obj fyne.CanvasObject) fyne.CanvasObject {
 
 // RoundedIconButton creates a circular accent button with a centered icon.
 func RoundedIconButton(icon fyne.Resource, tapped func()) fyne.CanvasObject {
-	// Background circle
-	circle := canvas.NewCircle(toNRGBA(theme.Color(theme.ColorNamePrimary)))
-	circle.StrokeColor = toNRGBA(theme.Color(theme.ColorNameFocus))
-	circle.StrokeWidth = 0
+	return NewRoundIconButton(icon, tapped)
+}
 
-	// Foreground button (for accessibility and focus handling)
-	btn := widget.NewButtonWithIcon("", icon, tapped)
-	btn.Importance = widget.HighImportance
+// RoundIconButton is a circular icon button that is fully clickable without rectangular hover overlay.
+type RoundIconButton struct {
+	widget.BaseWidget
+	Icon     fyne.Resource
+	Bg       color.Color
+	Fg       color.Color
+	OnTapped func()
+}
 
-	// Center the button over the circle
-	layered := container.NewMax(circle, container.NewCenter(btn))
-	return layered
+func NewRoundIconButton(icon fyne.Resource, onTap func()) *RoundIconButton {
+	b := &RoundIconButton{
+		Icon:     icon,
+		Bg:       toNRGBA(theme.Color(theme.ColorNamePrimary)),
+		Fg:       toNRGBA(theme.Color(theme.ColorNameForeground)),
+		OnTapped: onTap,
+	}
+	b.ExtendBaseWidget(b)
+	return b
+}
+
+func (b *RoundIconButton) CreateRenderer() fyne.WidgetRenderer {
+	circle := canvas.NewCircle(toNRGBA(b.Bg))
+	icon := widget.NewIcon(b.Icon)
+	cont := container.NewMax(circle, container.NewCenter(icon))
+	return widget.NewSimpleRenderer(cont)
+}
+
+func (b *RoundIconButton) MinSize() fyne.Size {
+	// Default minimum; actual size is controlled by parent container (GridWrap)
+	return fyne.NewSize(36, 36)
+}
+
+func (b *RoundIconButton) Tapped(*fyne.PointEvent) {
+	if b.OnTapped != nil {
+		b.OnTapped()
+	}
 }
 
 // toNRGBA converts any color.Color to color.NRGBA for manipulation.
@@ -129,16 +159,20 @@ func (r *gradientRenderer) Layout(size fyne.Size) {
 }
 
 func (r *gradientRenderer) MinSize() fyne.Size {
-	return fyne.NewSize(100, 100)
+	// Return zero size to allow gradient to be any size (no minimum constraint)
+	return fyne.NewSize(0, 0)
 }
 
 func (r *gradientRenderer) Refresh() {
-	// Trigger re-layout
-	r.Layout(r.gradient.Size())
+	// Trigger re-layout with current size
+	if size := r.gradient.Size(); size.Width > 0 && size.Height > 0 {
+		r.Layout(size)
+	}
 }
 
 func (r *gradientRenderer) BackgroundColor() fyne.ThemeColorName {
-	return theme.ColorNameBackground
+	// Return empty/transparent - gradient fills everything
+	return ""
 }
 
 func (r *gradientRenderer) Objects() []fyne.CanvasObject {
@@ -205,18 +239,153 @@ func (b *SimpleRectButton) SetText(text string) {
 
 // CreateTasksContainer wraps timeline in a rounded container with theme-specific bg.
 func CreateTasksContainer(content fyne.CanvasObject) fyne.CanvasObject {
-	var bg color.Color
+	bgColor := theme.Color(theme.ColorNameInputBackground)
 	if _, ok := fyne.CurrentApp().Settings().Theme().(*LightSoftTheme); ok {
-		bg = color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0xFF} // #ffffff
-	} else {
-		bg = color.NRGBA{R: 0x28, G: 0x28, B: 0x28, A: 0xFF} // #282828
+		// Light theme: keep tasks window (card) white
+		bgColor = color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0xFF}
+	} else if _, ok := fyne.CurrentApp().Settings().Theme().(*GruvboxBlackTheme); ok {
+		// Dark theme: force solid background (no gradient) using theme base background
+		bgColor = theme.Color(theme.ColorNameBackground)
 	}
-	rect := canvas.NewRectangle(toNRGBA(bg))
+	rect := canvas.NewRectangle(toNRGBA(bgColor))
 	rect.CornerRadius = 12
-	// Optional subtle border akin to mockup
-	sep := toNRGBA(theme.Color(theme.ColorNameSeparator))
-	sep.A = 80
-	rect.StrokeColor = sep
-	rect.StrokeWidth = 1
-	return container.NewMax(rect, container.NewPadded(content))
+	// Use custom padding to control exact spacing - 8px all around instead of default Fyne padding
+	padded := container.NewPadded(content)
+	return container.NewMax(rect, padded)
+}
+
+// NumberSpinner is a simple numeric stepper with up/down arrows on the right and a configurable background.
+type NumberSpinner struct {
+    widget.BaseWidget
+    Window   fyne.Window
+    Value     int
+    Min       int
+    Max       int
+    Step      int
+    TextColor color.Color
+    BgColor   color.Color
+    OnChanged func(int)
+}
+
+func NewNumberSpinner(win fyne.Window, initial, min, max, step int, textColor, bgColor color.Color, onChanged func(int)) *NumberSpinner {
+    ns := &NumberSpinner{
+        Window:   win,
+        Value:     initial,
+        Min:       min,
+        Max:       max,
+        Step:      step,
+        TextColor: textColor,
+        BgColor:   bgColor,
+        OnChanged: onChanged,
+    }
+    ns.ExtendBaseWidget(ns)
+    return ns
+}
+
+func (ns *NumberSpinner) increment() {
+    next := ns.Value + ns.Step
+    if ns.Max != 0 && next > ns.Max {
+        next = ns.Max
+    }
+    ns.SetValue(next)
+}
+
+func (ns *NumberSpinner) decrement() {
+    next := ns.Value - ns.Step
+    if next < ns.Min {
+        next = ns.Min
+    }
+    ns.SetValue(next)
+}
+
+func (ns *NumberSpinner) SetValue(v int) {
+    if ns.Max != 0 && v > ns.Max {
+        v = ns.Max
+    }
+    if v < ns.Min {
+        v = ns.Min
+    }
+    if ns.Value == v {
+        return
+    }
+    ns.Value = v
+    ns.Refresh()
+    if ns.OnChanged != nil {
+        ns.OnChanged(v)
+    }
+}
+
+func (ns *NumberSpinner) MinSize() fyne.Size {
+    return fyne.NewSize(140, 36)
+}
+
+func (ns *NumberSpinner) CreateRenderer() fyne.WidgetRenderer {
+    // background (white by requirement)
+    bg := canvas.NewRectangle(toNRGBA(ns.BgColor))
+    bg.CornerRadius = 8
+
+    // display value text
+    txt := canvas.NewText(fmt.Sprintf("%d", ns.Value), toNRGBA(ns.TextColor))
+    txt.TextSize = 16
+    txt.Alignment = fyne.TextAlignLeading
+
+    // up/down buttons (compact)
+    upBtn := widget.NewButton("▲", func() { ns.increment() })
+    downBtn := widget.NewButton("▼", func() { ns.decrement() })
+    upDown := container.NewVBox(
+        container.NewGridWrap(fyne.NewSize(24, 18), upBtn),
+        container.NewGridWrap(fyne.NewSize(24, 18), downBtn),
+    )
+
+    // left padding for text
+    textPadded := container.NewBorder(nil, nil, CreateSpacer(10, 1), nil, container.NewCenter(txt))
+
+    content := container.NewBorder(nil, nil, nil, upDown, textPadded)
+    return widget.NewSimpleRenderer(container.NewMax(bg, content))
+}
+
+// Tapped opens a small dialog to allow manual numeric input
+func (ns *NumberSpinner) Tapped(*fyne.PointEvent) {
+    if ns.Window == nil {
+        return
+    }
+    entry := widget.NewEntry()
+    entry.SetText(fmt.Sprintf("%d", ns.Value))
+    entry.PlaceHolder = "minutes"
+    // simple numeric filter (allow empty while editing)
+    entry.OnChanged = func(s string) {
+        if s == "" {
+            return
+        }
+        if _, err := strconv.Atoi(s); err != nil {
+            // strip non-digits
+            digits := make([]rune, 0, len(s))
+            for _, r := range s {
+                if r >= '0' && r <= '9' {
+                    digits = append(digits, r)
+                }
+            }
+            entry.SetText(string(digits))
+        }
+    }
+    content := container.NewVBox(
+        widget.NewLabel("Enter minutes:"),
+        entry,
+    )
+    dialog.NewCustomConfirm("Set value", "OK", "Cancel", content, func(ok bool) {
+        if !ok {
+            return
+        }
+        v, err := strconv.Atoi(entry.Text)
+        if err != nil {
+            return
+        }
+        if ns.Max != 0 && v > ns.Max {
+            v = ns.Max
+        }
+        if v < ns.Min {
+            v = ns.Min
+        }
+        ns.SetValue(v)
+    }, ns.Window).Show()
 }
