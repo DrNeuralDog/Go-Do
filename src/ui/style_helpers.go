@@ -216,8 +216,46 @@ func (b *SimpleRectButton) CreateRenderer() fyne.WidgetRenderer {
 	txt.Alignment = fyne.TextAlignCenter
 	txt.TextStyle = fyne.TextStyle{Bold: false}
 	cont := container.NewMax(bg, container.NewCenter(txt))
-	return widget.NewSimpleRenderer(cont)
+	return &simpleRectButtonRenderer{
+		button: b,
+		bg:     bg,
+		text:   txt,
+		cont:   cont,
+	}
 }
+
+// simpleRectButtonRenderer is a custom renderer for SimpleRectButton
+type simpleRectButtonRenderer struct {
+	button *SimpleRectButton
+	bg     *canvas.Rectangle
+	text   *canvas.Text
+	cont   *fyne.Container
+}
+
+func (r *simpleRectButtonRenderer) Layout(size fyne.Size) {
+	r.cont.Resize(size)
+}
+
+func (r *simpleRectButtonRenderer) MinSize() fyne.Size {
+	return r.button.MinSize()
+}
+
+func (r *simpleRectButtonRenderer) Refresh() {
+	// Update text content from button
+	r.text.Text = r.button.Text
+	r.text.Refresh()
+	r.bg.Refresh()
+}
+
+func (r *simpleRectButtonRenderer) BackgroundColor() fyne.ThemeColorName {
+	return ""
+}
+
+func (r *simpleRectButtonRenderer) Objects() []fyne.CanvasObject {
+	return []fyne.CanvasObject{r.cont}
+}
+
+func (r *simpleRectButtonRenderer) Destroy() {}
 
 func (b *SimpleRectButton) MinSize() fyne.Size {
 	if b.SizeFixed.Width > 0 && b.SizeFixed.Height > 0 {
@@ -235,6 +273,20 @@ func (b *SimpleRectButton) Tapped(*fyne.PointEvent) {
 func (b *SimpleRectButton) SetText(text string) {
 	b.Text = text
 	b.Refresh()
+}
+
+// CreateStyledSelect wraps a Select widget in a rounded container with custom background
+func CreateStyledSelect(selectWidget *widget.Select, bgColor color.Color, size fyne.Size, radius float32) fyne.CanvasObject {
+	bg := canvas.NewRectangle(toNRGBA(bgColor))
+	bg.CornerRadius = radius
+
+	// Wrap select in container with fixed size
+	selectWrapper := container.NewGridWrap(size, selectWidget)
+
+	return container.NewMax(
+		container.NewGridWrap(size, bg),
+		selectWrapper,
+	)
 }
 
 // CreateTasksContainer wraps timeline in a rounded container with theme-specific bg.
