@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image/color"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -36,17 +37,18 @@ type MainWindow struct {
 	viewModeBtn *widget.Button // legacy hidden
 	themeBtn    *widget.Button // legacy hidden
 	// Styled controls
-	viewSelect      *widget.Select
+	viewSelect      *CustomSelect
 	prevRectBtn     *SimpleRectButton
 	nextRectBtn     *SimpleRectButton
 	pomodoroRectBtn *SimpleRectButton
 	themeRectBtn    *SimpleRectButton
 
 	// State
-	currentDate time.Time // Changed to time.Time for daily view
-	viewMode    models.ViewMode
-	todos       []*models.TodoItem
-	isGruvbox   bool
+	currentDate    time.Time // Changed to time.Time for daily view
+	viewMode       models.ViewMode
+	todos          []*models.TodoItem
+	isGruvbox      bool
+	pomodoroWindow *PomodoroWindow // Reference to open pomodoro window
 }
 
 // NewMainWindow creates a new main window
@@ -68,6 +70,9 @@ func NewMainWindow(window fyne.Window, dataDir string) *MainWindow {
 	// Initialize timeline
 	mw.timeline = NewTimeline(mw.dataManager)
 	mw.timeline.SetOnTodoSelected(mw.onTodoSelected)
+	// Reorder callback from timeline (manual up/down or DnD)
+	mw.timeline.SetOnTodoReorder(mw.onTodoReorder)
+	mw.timeline.SetOnReorderFinished(mw.onReorderFinished)
 
 	mw.setupUI()
 	mw.loadTodos()
@@ -178,8 +183,8 @@ func (mw *MainWindow) setupUI() {
 	}
 	logoImg := canvas.NewImageFromResource(logoRes)
 	logoImg.FillMode = canvas.ImageFillContain
-	// Icon size reduced to 54px (was 162px - 3x smaller)
-	logoSize := float32(80)
+
+	logoSize := float32(84)
 	logoImg.SetMinSize(fyne.NewSize(logoSize, logoSize))
 
 	// Title text - 56px from mockup
@@ -198,25 +203,21 @@ func (mw *MainWindow) setupUI() {
 		container.NewMax(logoImg),
 	)
 
-	header := container.NewHBox(logoAligned, CreateSpacer(5, 1), titleTxt)
+	header := container.NewHBox(logoAligned, titleTxt)
 
-	// --- Controls row: [Select] [←] [→] [Pomodoro] ---
-	var navBg, navFg, pomodoroBg, pomodoroFg color.Color
+	// --- Controls row: [Select] [←] [→] [Add] ---
+	var navBg, navFg color.Color
 	if _, ok := currentTheme.(*LightSoftTheme); ok {
 		navBg = hex("#ff8c42")
 		navFg = color.White
-		pomodoroBg = hex("#ff8c42")
-		pomodoroFg = color.White
 	} else {
 		navBg = hex("#504945")
 		navFg = hex("#fabd2f")
-		pomodoroBg = hex("#504945")
-		pomodoroFg = hex("#fabd2f")
 	}
 
-	// Create Select widget with all view modes
+	// Create custom Select widget with all view modes (no press highlight)
 	viewOptions := []string{"All", "Incomplete", "Complete", "Important"}
-	mw.viewSelect = widget.NewSelect(viewOptions, func(selected string) {
+	mw.viewSelect = NewCustomSelect(viewOptions, func(selected string) {
 		// Map selected string to ViewMode
 		switch selected {
 		case "All":
@@ -245,17 +246,18 @@ func (mw *MainWindow) setupUI() {
 	mw.prevRectBtn = NewSimpleRectButton("←", navBg, navFg, fyne.NewSize(44, 44), 8, mw.onPrevDayClicked)
 	mw.nextRectBtn = NewSimpleRectButton("→", navBg, navFg, fyne.NewSize(44, 44), 8, mw.onNextDayClicked)
 
-	// Pomodoro button
-	mw.pomodoroRectBtn = NewSimpleRectButton("Pomodoro", pomodoroBg, pomodoroFg, fyne.NewSize(100, 44), 8, mw.onPomodoroTopClicked)
+	// Add button (circular, replaces Pomodoro in top controls)
+	addButtonRounded := RoundedIconButton(theme.ContentAddIcon(), mw.onAddButtonClicked)
+	addWrapTop := container.NewGridWrap(fyne.NewSize(44, 44), addButtonRounded)
 
 	controls := container.NewHBox(
 		selectWrapper,
 		CreateSpacer(10, 1),
 		mw.prevRectBtn,
-		CreateSpacer(10, 1),
+		CreateSpacer(2, 1),
 		mw.nextRectBtn,
 		CreateSpacer(10, 1),
-		mw.pomodoroRectBtn,
+		addWrapTop,
 	)
 
 	// Set up timeline with current date and view mode
@@ -317,6 +319,11 @@ func (mw *MainWindow) onThemeToggleClicked() {
 	mw.setupUI()
 	mw.loadTodos()
 	mw.refreshView()
+
+	// Update pomodoro window if it's open
+	if mw.pomodoroWindow != nil {
+		mw.pomodoroWindow.UpdateTheme(mw.isGruvbox)
+	}
 }
 
 // loadTodos loads todos for the current day
@@ -342,6 +349,34 @@ func (mw *MainWindow) loadTodos() {
 		}
 	}
 	mw.todos = mw.viewMode.FilterItems(dailyTodos, currentTime)
+
+	// Sort daily todos by implicit Order (if set), then by time (newest first)
+	sort.SliceStable(mw.todos, func(i, j int) bool {
+		a := mw.todos[i]
+		b := mw.todos[j]
+		// If both have no explicit order, fallback to time desc
+		if a.Order == 0 && b.Order == 0 {
+			if a.TodoTime.Equal(b.TodoTime) {
+				return a.Name < b.Name
+			}
+			return a.TodoTime.After(b.TodoTime)
+		}
+		// Items with explicit order go before those without
+		if a.Order == 0 {
+			return false
+		}
+		if b.Order == 0 {
+			return true
+		}
+		if a.Order != b.Order {
+			return a.Order < b.Order
+		}
+		// Tie-breaker: time desc
+		if a.TodoTime.Equal(b.TodoTime) {
+			return a.Name < b.Name
+		}
+		return a.TodoTime.After(b.TodoTime)
+	})
 }
 
 // refreshView updates the UI display
@@ -397,22 +432,147 @@ func (mw *MainWindow) onTodoSelected(todo *models.TodoItem, todoTime time.Time) 
 	})
 }
 
-// setupBottomButtons creates the bottom button layout with add and theme buttons
+// onTodoReorder handles reorder requests from timeline (delta = -1 up, +1 down)
+func (mw *MainWindow) onTodoReorder(todo *models.TodoItem, delta int) {
+	if delta == 0 || todo == nil {
+		return
+	}
+
+	year, month := mw.currentDate.Year(), int(mw.currentDate.Month())
+	monthlyTodos, err := mw.dataManager.GetTodosForMonth(year, month)
+	if err != nil {
+		return
+	}
+
+	// Build full list for current day (includes hidden by filter)
+	startOfDay := time.Date(mw.currentDate.Year(), mw.currentDate.Month(), mw.currentDate.Day(), 0, 0, 0, 0, mw.currentDate.Location())
+	endOfDay := startOfDay.Add(24 * time.Hour)
+	dayTodos := make([]*models.TodoItem, 0)
+	for _, t := range monthlyTodos {
+		if t.TodoTime.After(startOfDay) && t.TodoTime.Before(endOfDay) {
+			dayTodos = append(dayTodos, t)
+		}
+	}
+
+	// Sort by current visible rule (Order then time desc)
+	sort.SliceStable(dayTodos, func(i, j int) bool {
+		a := dayTodos[i]
+		b := dayTodos[j]
+		if a.Order == 0 && b.Order == 0 {
+			if a.TodoTime.Equal(b.TodoTime) {
+				return a.Name < b.Name
+			}
+			return a.TodoTime.After(b.TodoTime)
+		}
+		if a.Order == 0 {
+			return false
+		}
+		if b.Order == 0 {
+			return true
+		}
+		if a.Order != b.Order {
+			return a.Order < b.Order
+		}
+		if a.TodoTime.Equal(b.TodoTime) {
+			return a.Name < b.Name
+		}
+		return a.TodoTime.After(b.TodoTime)
+	})
+
+	// Find index of the item
+	idx := -1
+	for i, t := range dayTodos {
+		if t.TodoTime.Equal(todo.TodoTime) && t.Name == todo.Name {
+			idx = i
+			break
+		}
+	}
+	if idx == -1 {
+		return
+	}
+
+	newIdx := idx + delta
+	if newIdx < 0 {
+		newIdx = 0
+	}
+	if newIdx >= len(dayTodos) {
+		newIdx = len(dayTodos) - 1
+	}
+	if newIdx == idx {
+		return
+	}
+
+	// Move within slice
+	item := dayTodos[idx]
+	if newIdx > idx {
+		copy(dayTodos[idx:], dayTodos[idx+1:newIdx+1])
+	} else {
+		copy(dayTodos[newIdx+1:], dayTodos[newIdx:idx])
+	}
+	dayTodos[newIdx] = item
+
+	// Reassign Order sequentially starting at 1
+	for i, t := range dayTodos {
+		t.Order = i + 1
+	}
+
+	// Immediate UI update without disk IO: reorder visible list by new Orders
+	sort.SliceStable(mw.todos, func(i, j int) bool {
+		a := mw.todos[i]
+		b := mw.todos[j]
+		if a.Order == 0 && b.Order == 0 {
+			if a.TodoTime.Equal(b.TodoTime) {
+				return a.Name < b.Name
+			}
+			return a.TodoTime.After(b.TodoTime)
+		}
+		if a.Order == 0 {
+			return false
+		}
+		if b.Order == 0 {
+			return true
+		}
+		if a.Order != b.Order {
+			return a.Order < b.Order
+		}
+		if a.TodoTime.Equal(b.TodoTime) {
+			return a.Name < b.Name
+		}
+		return a.TodoTime.After(b.TodoTime)
+	})
+	mw.timeline.SetTodos(mw.todos)
+	mw.timeline.Refresh()
+}
+
+// onReorderFinished persists the updated order once at the end of drag
+func (mw *MainWindow) onReorderFinished() {
+	year, month := mw.currentDate.Year(), int(mw.currentDate.Month())
+	monthlyTodos, err := mw.dataManager.GetTodosForMonth(year, month)
+	if err != nil {
+		return
+	}
+	_ = mw.dataManager.SaveTodosForMonth(year, month, monthlyTodos)
+}
+
+// setupBottomButtons creates the bottom button layout with Pomodoro and theme buttons
 func (mw *MainWindow) setupBottomButtons() fyne.CanvasObject {
 	// Get theme colors
 	currentTheme := fyne.CurrentApp().Settings().Theme()
-	var themeBg, themeFg color.Color
+	var themeBg, themeFg, pomodoroBg, pomodoroFg color.Color
 	if _, ok := currentTheme.(*LightSoftTheme); ok {
 		themeBg = hex("#ff8c42")
 		themeFg = color.White
+		pomodoroBg = hex("#ff8c42")
+		pomodoroFg = color.White
 	} else {
 		themeBg = hex("#504945")
 		themeFg = hex("#fabd2f")
+		pomodoroBg = hex("#504945")
+		pomodoroFg = hex("#fabd2f")
 	}
 
-	// Add button on the left-center (60x60px)
-	addButtonRounded := RoundedIconButton(theme.ContentAddIcon(), mw.onAddButtonClicked)
-	addWrap := container.NewGridWrap(fyne.NewSize(55, 55), addButtonRounded)
+	// Pomodoro button on the left (100x44px)
+	mw.pomodoroRectBtn = NewSimpleRectButton("Pomodoro", pomodoroBg, pomodoroFg, fyne.NewSize(100, 44), 8, mw.onPomodoroTopClicked)
 
 	// Theme toggle button on the right (with text)
 	themeLabel := "Dark"
@@ -424,17 +584,13 @@ func (mw *MainWindow) setupBottomButtons() fyne.CanvasObject {
 
 	// Create theme button as SimpleRectButton
 	mw.themeRectBtn = NewSimpleRectButton(themeLabel, themeBg, themeFg, fyne.NewSize(100, 44), 8, mw.onThemeToggleClicked)
-	themeWrap := container.NewVBox(
-		CreateSpacer(1, 8), // Add small spacer to align with add button
-		mw.themeRectBtn,
-	)
 
-	// Create bottom button layout: add on left-center, theme on right with padding
+	// Create bottom button layout: theme on left, pomodoro on right with padding
 	bottomButtons := container.NewBorder(
 		nil, nil,
-		container.NewBorder(nil, nil, CreateSpacer(25, 1), nil, addWrap),   // 20px left margin
-		container.NewBorder(nil, nil, nil, CreateSpacer(25, 1), themeWrap), // 20px right margin
-		canvas.NewRectangle(color.Transparent),                             // center placeholder
+		container.NewBorder(nil, nil, CreateSpacer(25, 1), nil, mw.themeRectBtn),    // 25px left margin
+		container.NewBorder(nil, nil, nil, CreateSpacer(25, 1), mw.pomodoroRectBtn), // 25px right margin
+		canvas.NewRectangle(color.Transparent),                                      // center placeholder
 	)
 
 	// Place spacer BELOW the buttons to lift them up from the bottom edge
@@ -446,7 +602,19 @@ func (mw *MainWindow) setupBottomButtons() fyne.CanvasObject {
 
 // onPomodoroTopClicked handles the top pomodoro button click
 func (mw *MainWindow) onPomodoroTopClicked() {
+	// If pomodoro window already exists and is visible, just show it
+	if mw.pomodoroWindow != nil {
+		mw.pomodoroWindow.Show()
+		return
+	}
+
 	// Create and show pomodoro window
-	pomodoroWindow := NewPomodoroWindow(fyne.CurrentApp(), mw.isGruvbox)
-	pomodoroWindow.Show()
+	mw.pomodoroWindow = NewPomodoroWindow(fyne.CurrentApp(), mw.isGruvbox)
+
+	// Set callback to clear reference when window closes
+	mw.pomodoroWindow.SetOnClosed(func() {
+		mw.pomodoroWindow = nil
+	})
+
+	mw.pomodoroWindow.Show()
 }

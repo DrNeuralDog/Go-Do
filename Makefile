@@ -16,7 +16,7 @@ BINARY_MACOS=$(BINARY_NAME)-macos
 BUILD_DIR=bin
 
 # Build targets
-.PHONY: all build clean test deps help
+.PHONY: all build clean test deps help package-windows package-all generate-ico embed-ico build-windows-ico
 
 all: deps test build
 
@@ -89,6 +89,35 @@ dev: clean deps test build run
 init:
 	@echo "Initializing data directory..."
 	@mkdir -p data
+
+# Package Windows executable with embedded icon (taskbar/EXE icon)
+package-windows:
+	@echo "Packaging Windows EXE with icon..."
+	@mkdir -p $(BUILD_DIR)
+	@fyne package -os windows -icon doc/Icons/Icon_Work_Version.png -name GoDo -release
+	@powershell -NoProfile -Command "Remove-Item -Force -ErrorAction SilentlyContinue .\\$(BUILD_DIR)\\GoDo.exe; Move-Item -Force .\\GoDo.exe .\\$(BUILD_DIR)\\GoDo.exe" || mv -f GoDo.exe $(BUILD_DIR)/GoDo.exe
+
+# Package for all platforms (Windows packaging includes icon)
+package-all: package-windows
+
+# --- Alternative Windows build path with resource.syso (ICO) ---
+# 1) Convert PNG icon to ICO via PowerShell (.NET) at 256x256
+generate-ico:
+	@echo "Generating .ico from PNG..."
+	@mkdir -p build
+	@powershell -NoProfile -Command "Add-Type -AssemblyName System.Drawing; $src='doc/Icons/Icon_Work_Version.png'; $dst='build/Icon_Work_Version.ico'; $bmp=New-Object System.Drawing.Bitmap($src); $bmp256=New-Object System.Drawing.Bitmap($bmp,256,256); $icon=[System.Drawing.Icon]::FromHandle(($bmp256.GetHicon())); $fs=New-Object System.IO.FileStream($dst,[System.IO.FileMode]::Create); $icon.Save($fs); $fs.Close(); $icon.Dispose(); $bmp256.Dispose(); $bmp.Dispose();"
+
+# 2) Embed ICO into resource.syso using rsrc and then build EXE
+embed-ico: generate-ico
+	@echo "Embedding ICO into resource.syso..."
+	@$(GOCMD) install github.com/akavel/rsrc@latest
+	@rsrc -ico build/Icon_Work_Version.ico -o resource.syso
+
+# 3) Build Windows exe that picks up resource.syso -> icon appears in Explorer
+build-windows-ico: embed-ico
+	@echo "Building Windows EXE with embedded .ico (resource.syso)..."
+	@mkdir -p $(BUILD_DIR)
+	GOOS=windows GOARCH=amd64 $(GOBUILD) -o $(BUILD_DIR)/GoDo.exe src/main.go
 
 # Help target
 help:

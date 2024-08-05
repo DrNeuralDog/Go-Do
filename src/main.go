@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	assets "todo-list-migration/doc"
 	"todo-list-migration/src/persistence"
 	"todo-list-migration/src/ui"
 
@@ -16,7 +17,14 @@ func main() {
 	myApp := app.New()
 	// Default theme: Soft Light (per mockup)
 	myApp.Settings().SetTheme(ui.NewLightSoftTheme())
+	// Set app icon (used for window title bar/taskbar)
+	if assets.AppIcon != nil {
+		myApp.SetIcon(assets.AppIcon)
+	}
 	myWindow := myApp.NewWindow("My Day - Todo List")
+	if assets.AppIcon != nil {
+		myWindow.SetIcon(assets.AppIcon)
+	}
 	myWindow.SetMaster()
 
 	// Get the data directory (create if doesn't exist)

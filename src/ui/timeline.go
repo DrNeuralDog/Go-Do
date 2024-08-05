@@ -12,6 +12,8 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/driver/desktop"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -31,7 +33,12 @@ type Timeline struct {
 	visibleItems   []*models.TodoItem
 
 	// Event callbacks
-	onTodoSelected func(*models.TodoItem, time.Time)
+	onTodoSelected    func(*models.TodoItem, time.Time)
+	onTodoReorder     func(*models.TodoItem, int) // delta: -1 up, +1 down
+	onReorderFinished func()
+
+	// drag state
+	draggingTodo *models.TodoItem
 }
 
 // NewTimeline creates a new timeline widget
@@ -69,6 +76,11 @@ func (t *Timeline) SetTodos(todos []*models.TodoItem) {
 	// Don't auto-refresh - let caller control when to refresh
 }
 
+// SetOnTodoReorder sets callback for explicit reorder actions (up/down or DnD)
+func (t *Timeline) SetOnTodoReorder(callback func(*models.TodoItem, int)) {
+	t.onTodoReorder = callback
+}
+
 // organizeByDate groups todos by date for display
 func (t *Timeline) organizeByDate() {
 	t.dateGroups = make(map[string][]*models.TodoItem)
@@ -89,13 +101,14 @@ func (t *Timeline) CreateRenderer() fyne.WidgetRenderer {
 type timelineRenderer struct {
 	timeline *Timeline
 	scroll   *container.Scroll
+	listBox  *fyne.Container
 }
 
 func (r *timelineRenderer) Layout(size fyne.Size) {
 	if r.scroll == nil {
-		// Initialize scroll if not already done
-		content := r.createTimelineContent()
-		r.scroll = container.NewScroll(content)
+		// Initialize scroll with persistent content container
+		r.listBox = r.createTimelineContent()
+		r.scroll = container.NewScroll(r.listBox)
 	}
 	// Ensure scroll fills all available area
 	r.scroll.Resize(size)
@@ -108,22 +121,21 @@ func (r *timelineRenderer) MinSize() fyne.Size {
 }
 
 func (r *timelineRenderer) Refresh() {
-	// Store current scroll position
-	var offset fyne.Position
-	if r.scroll != nil {
-		offset = r.scroll.Offset
-	}
-
-	// Recreate scroll container entirely to avoid layout bugs
-	content := r.createTimelineContent()
-	r.scroll = container.NewScroll(content)
-
-	// Restore scroll position
-	r.scroll.Offset = offset
-
-	// Ensure proper sizing
-	if size := r.timeline.Size(); size.Width > 0 && size.Height > 0 {
-		r.scroll.Resize(size)
+	// Update content in-place for smoother UI
+	if r.scroll == nil || r.listBox == nil {
+		r.listBox = r.createTimelineContent()
+		r.scroll = container.NewScroll(r.listBox)
+	} else {
+		// Preserve scroll offset
+		offset := r.scroll.Offset
+		// Rebuild children objects
+		objects := r.buildTimelineObjects()
+		r.listBox.Objects = objects
+		r.listBox.Refresh()
+		r.scroll.Offset = offset
+		if size := r.timeline.Size(); size.Width > 0 && size.Height > 0 {
+			r.scroll.Resize(size)
+		}
 	}
 }
 
@@ -146,13 +158,18 @@ func (r *timelineRenderer) Destroy() {
 }
 
 func (r *timelineRenderer) createTimelineContent() *fyne.Container {
+	objects := r.buildTimelineObjects()
+	return container.NewVBox(objects...)
+}
+
+func (r *timelineRenderer) buildTimelineObjects() []fyne.CanvasObject {
 	var objects []fyne.CanvasObject
 
 	if len(r.timeline.visibleItems) == 0 {
 		emptyLabel := widget.NewLabel(localization.GetString("status_empty_list"))
 		emptyLabel.Alignment = fyne.TextAlignCenter
 		objects = append(objects, emptyLabel)
-		return container.NewVBox(objects...)
+		return objects
 	}
 
 	// Single date header for current day
@@ -165,8 +182,7 @@ func (r *timelineRenderer) createTimelineContent() *fyne.Container {
 		todoItem := r.createTodoItem(todo)
 		objects = append(objects, todoItem)
 	}
-
-	return container.NewVBox(objects...)
+	return objects
 }
 
 func (r *timelineRenderer) getSortedDateKeys() []string {
@@ -197,24 +213,22 @@ func (r *timelineRenderer) createDateHeader(dateKey string) fyne.CanvasObject {
 	headerLabel.TextStyle = fyne.TextStyle{Bold: true}
 	headerLabel.TextSize = 20
 
-	// Add left padding to match task items alignment (padding is handled by container.NewPadded)
-	// But we need minimal left offset - tasks have ColorSquare(32) + Checkbox(20) + gaps ~12px = ~64px total left
-	// Per mockup the date is NOT that far left, just slightly inset from container edge
-	// Let's use a simple left spacer matching typical padding
+	// Center the date header within the tasks window
+	headerLabel.Alignment = fyne.TextAlignCenter
 	return container.NewVBox(
-		container.NewHBox(CreateSpacer(8, 1), headerLabel), // 8px left offset
+		container.NewCenter(headerLabel),
 		CreateSpacer(1, 10),
 	)
 }
 
 func (r *timelineRenderer) createTodoItem(todo *models.TodoItem) fyne.CanvasObject {
-	// Priority indicator: colored SQUARE 32x32px from mockup
+	// Priority indicator: colored vertical RECTANGLE 16x32px (half width, same height)
 	colorSquare := canvas.NewRectangle(todo.GetLevelColor())
-	colorSquare.CornerRadius = 6
-	colorSquare.SetMinSize(fyne.NewSize(32, 32))
-	colorSquareWrap := container.NewGridWrap(fyne.NewSize(32, 32), colorSquare)
+	colorSquare.CornerRadius = 2 // Sharper corners (was 6)
+	colorSquare.SetMinSize(fyne.NewSize(16, 32))
+	colorSquareWrap := container.NewGridWrap(fyne.NewSize(16, 32), colorSquare)
 
-	// Custom square checkbox 20x20 per mockup
+	// Custom square checkbox 20x20 per mockup, centered vertically
 	doneCheck := newSquareCheckbox(todo.Done, func(checked bool) {
 		updated := *todo
 		updated.Done = checked
@@ -222,8 +236,11 @@ func (r *timelineRenderer) createTodoItem(todo *models.TodoItem) fyne.CanvasObje
 		if todos, err := r.timeline.dataManager.GetTodosForMonth(r.timeline.currentDate.Year(), int(r.timeline.currentDate.Month())); err == nil {
 			filtered := r.timeline.viewMode.FilterItems(todos, time.Now())
 			r.timeline.SetTodos(filtered)
+			r.timeline.Refresh()
 		}
 	})
+	// Wrap checkbox in container for vertical centering
+	doneCheckCentered := container.NewCenter(doneCheck)
 
 	// Todo name - takes the remaining space, 18px from mockup
 	nameLabel := widget.NewLabel(todo.Name)
@@ -250,13 +267,17 @@ func (r *timelineRenderer) createTodoItem(todo *models.TodoItem) fyne.CanvasObje
 			if todos, err := r.timeline.dataManager.GetTodosForMonth(r.timeline.currentDate.Year(), int(r.timeline.currentDate.Month())); err == nil {
 				filtered := r.timeline.viewMode.FilterItems(todos, time.Now())
 				r.timeline.SetTodos(filtered)
+				r.timeline.Refresh()
 			}
 		}
 	})
+	// Push star down to center it vertically in the row
+	statusCentered := container.NewVBox(CreateSpacer(1, 7), status)
 
-	// Layout: [ColorSquare] [Checkbox] [Name................] [Time] [Star] [Delete]
-	leftSection := container.NewHBox(colorSquareWrap, doneCheck)
-	rightSection := container.NewHBox(timeLabel, status)
+	// Layout: [ColorSquare] [Spacer] [Checkbox] [Name................] [Time] [Star] [Delete]
+	// Add spacer between color and checkbox (doubled spacing)
+	leftSection := container.NewHBox(colorSquareWrap, CreateSpacer(8, 1), doneCheckCentered)
+	rightSection := container.NewHBox(timeLabel, CreateSpacer(8, 1), statusCentered)
 	content := container.NewBorder(nil, nil, leftSection, rightSection, nameLabel)
 
 	// Row with bottom border only (no card)
@@ -273,12 +294,29 @@ func (r *timelineRenderer) createTodoItem(todo *models.TodoItem) fyne.CanvasObje
 		bottomLine,
 	)
 
+	// press/drag overlay for row feedback
+	pressOverlay := canvas.NewRectangle(color.NRGBA{R: 0, G: 0, B: 0, A: 0})
+	pressOverlay.CornerRadius = 0
+	pressStack := container.NewMax(row, pressOverlay)
+
+	// If this is the currently dragged item - keep it highlighted during drag
+	if r.timeline.draggingTodo == todo {
+		// Slight blue tint with high transparency (~20% opacity)
+		pressOverlay.FillColor = color.NRGBA{R: 0x3C, G: 0x82, B: 0xFF, A: 50}
+		pressOverlay.Refresh()
+	}
+
 	// Make the entire item clickable
 	tappable := &tappableTodo{
-		todo:       todo,
-		todoTime:   todo.TodoTime,
-		container:  row,
-		onSelected: r.timeline.onTodoSelected,
+		todo:         todo,
+		todoTime:     todo.TodoTime,
+		container:    pressStack,
+		press:        pressOverlay,
+		onSelected:   r.timeline.onTodoSelected,
+		onReorder:    r.timeline.onTodoReorder,
+		rowThresh:    60,
+		onReorderEnd: r.timeline.onReorderFinished,
+		timeline:     r.timeline,
 	}
 	tappable.ExtendBaseWidget(tappable)
 
@@ -288,19 +326,136 @@ func (r *timelineRenderer) createTodoItem(todo *models.TodoItem) fyne.CanvasObje
 // tappableTodo makes todo items clickable
 type tappableTodo struct {
 	widget.BaseWidget
-	todo       *models.TodoItem
-	todoTime   time.Time
-	container  *fyne.Container
-	onSelected func(*models.TodoItem, time.Time)
+	todo         *models.TodoItem
+	todoTime     time.Time
+	container    *fyne.Container
+	press        *canvas.Rectangle
+	onSelected   func(*models.TodoItem, time.Time)
+	onReorder    func(*models.TodoItem, int)
+	onReorderEnd func()
+	dragAccumY   float32
+	rowThresh    float32
+	dragging     bool
+	lastMouseY   float32
+	timeline     *Timeline
 }
 
 func (tt *tappableTodo) CreateRenderer() fyne.WidgetRenderer {
 	return widget.NewSimpleRenderer(tt.container)
 }
 
+// Cursor returns a hand/move cursor to indicate draggable item
+func (tt *tappableTodo) Cursor() desktop.Cursor {
+	return desktop.PointerCursor
+}
+
 func (tt *tappableTodo) Tapped(*fyne.PointEvent) {
+	// flash overlay
+	if tt.press != nil {
+		col := toNRGBA(theme.Color(theme.ColorNameHover))
+		if col.A < 60 {
+			col.A = 60
+		}
+		tt.press.FillColor = col
+		tt.press.Refresh()
+		go func(p *canvas.Rectangle) {
+			time.Sleep(120 * time.Millisecond)
+			p.FillColor = color.NRGBA{R: 0, G: 0, B: 0, A: 0}
+			p.Refresh()
+		}(tt.press)
+	}
 	if tt.onSelected != nil {
 		tt.onSelected(tt.todo, tt.todoTime)
+	}
+}
+
+// Implement fyne.Draggable
+func (tt *tappableTodo) Dragged(e *fyne.DragEvent) {
+	tt.dragAccumY += e.Dragged.DY
+	// Move downwards
+	for tt.dragAccumY > tt.rowThresh {
+		if tt.onReorder != nil {
+			tt.onReorder(tt.todo, 1)
+		}
+		tt.dragAccumY -= tt.rowThresh
+	}
+	// Move upwards
+	for tt.dragAccumY < -tt.rowThresh {
+		if tt.onReorder != nil {
+			tt.onReorder(tt.todo, -1)
+		}
+		tt.dragAccumY += tt.rowThresh
+	}
+}
+
+func (tt *tappableTodo) DragEnd() {
+	tt.dragAccumY = 0
+	if tt.onReorderEnd != nil {
+		tt.onReorderEnd()
+	}
+	if tt.timeline != nil {
+		tt.timeline.draggingTodo = nil
+		// Force rebuild so any drag highlight applied during re-render is cleared
+		tt.timeline.Refresh()
+	}
+	// Ensure highlight is cleared even if MouseUp was not delivered
+	if tt.press != nil {
+		tt.press.FillColor = color.NRGBA{R: 0, G: 0, B: 0, A: 0}
+		tt.press.Refresh()
+	}
+}
+
+// Implement desktop.Mouseable to ensure drag works well inside Scroll
+func (tt *tappableTodo) MouseDown(e *desktop.MouseEvent) {
+	tt.dragging = true
+	tt.lastMouseY = e.Position.Y
+	// Highlight row while dragging
+	if tt.press != nil {
+		// Blue tint with ~20% opacity for both themes
+		tt.press.FillColor = color.NRGBA{R: 0x3C, G: 0x82, B: 0xFF, A: 50}
+		tt.press.Refresh()
+	}
+	if tt.timeline != nil {
+		tt.timeline.draggingTodo = tt.todo
+	}
+}
+
+func (tt *tappableTodo) MouseMoved(e *desktop.MouseEvent) {
+	if !tt.dragging {
+		return
+	}
+	dy := e.Position.Y - tt.lastMouseY
+	tt.lastMouseY = e.Position.Y
+	tt.dragAccumY += dy
+	for tt.dragAccumY > tt.rowThresh {
+		if tt.onReorder != nil {
+			tt.onReorder(tt.todo, 1)
+		}
+		tt.dragAccumY -= tt.rowThresh
+	}
+	for tt.dragAccumY < -tt.rowThresh {
+		if tt.onReorder != nil {
+			tt.onReorder(tt.todo, -1)
+		}
+		tt.dragAccumY += tt.rowThresh
+	}
+}
+
+func (tt *tappableTodo) MouseUp(*desktop.MouseEvent) {
+	tt.dragging = false
+	tt.dragAccumY = 0
+	if tt.onReorderEnd != nil {
+		tt.onReorderEnd()
+	}
+	// Remove highlight
+	if tt.press != nil {
+		tt.press.FillColor = color.NRGBA{R: 0, G: 0, B: 0, A: 0}
+		tt.press.Refresh()
+	}
+	if tt.timeline != nil {
+		tt.timeline.draggingTodo = nil
+		// Force rebuild so any drag highlight applied during re-render is cleared
+		tt.timeline.Refresh()
 	}
 }
 
@@ -309,6 +464,10 @@ type squareCheckbox struct {
 	widget.BaseWidget
 	checked   bool
 	onChanged func(bool)
+	rect      *canvas.Rectangle
+	tick      *canvas.Text
+	overlay   *canvas.Rectangle
+	cont      *fyne.Container
 }
 
 func newSquareCheckbox(initial bool, onChanged func(bool)) *squareCheckbox {
@@ -328,19 +487,23 @@ func (c *squareCheckbox) CreateRenderer() fyne.WidgetRenderer {
 		border = color.NRGBA{R: 0x66, G: 0x5c, B: 0x54, A: 0xFF}
 		fillChecked = color.NRGBA{R: 0x98, G: 0x97, B: 0x1a, A: 0xFF} // #98971a
 	}
-	rect := canvas.NewRectangle(color.NRGBA{R: 0, G: 0, B: 0, A: 0})
-	rect.StrokeColor = border
-	rect.StrokeWidth = 2
-	rect.CornerRadius = 3
-	rect.SetMinSize(fyne.NewSize(20, 20))
+	c.rect = canvas.NewRectangle(color.NRGBA{R: 0, G: 0, B: 0, A: 0})
+	c.rect.StrokeColor = border
+	c.rect.StrokeWidth = 2
+	c.rect.CornerRadius = 3
+	c.rect.SetMinSize(fyne.NewSize(20, 20))
 
-	tick := canvas.NewText("", color.White)
+	c.tick = canvas.NewText("", color.White)
 	if c.checked {
-		rect.FillColor = fillChecked
-		tick.Text = "✓"
+		c.rect.FillColor = fillChecked
+		c.tick.Text = "✓"
 	}
-	cont := container.NewMax(rect, container.NewCenter(tick))
-	return widget.NewSimpleRenderer(cont)
+	c.overlay = canvas.NewRectangle(color.NRGBA{R: 0, G: 0, B: 0, A: 0})
+	c.cont = container.NewGridWrap(
+		fyne.NewSize(20, 20),
+		container.NewMax(c.rect, container.NewCenter(c.tick), c.overlay),
+	)
+	return widget.NewSimpleRenderer(c.cont)
 }
 
 func (c *squareCheckbox) MinSize() fyne.Size { return fyne.NewSize(20, 20) }
@@ -353,11 +516,35 @@ func (c *squareCheckbox) Tapped(*fyne.PointEvent) {
 	c.Refresh()
 }
 
+func (c *squareCheckbox) Refresh() {
+	// update visuals according to checked state and theme
+	var fillChecked color.Color
+	if _, ok := fyne.CurrentApp().Settings().Theme().(*LightSoftTheme); ok {
+		fillChecked = color.NRGBA{R: 0x4C, G: 0xAF, B: 0x50, A: 0xFF}
+	} else {
+		fillChecked = color.NRGBA{R: 0x98, G: 0x97, B: 0x1a, A: 0xFF}
+	}
+	if c.rect != nil && c.tick != nil {
+		if c.checked {
+			c.rect.FillColor = fillChecked
+			c.tick.Text = "✓"
+		} else {
+			c.rect.FillColor = color.NRGBA{R: 0, G: 0, B: 0, A: 0}
+			c.tick.Text = ""
+		}
+		c.rect.Refresh()
+		c.tick.Refresh()
+	}
+	c.BaseWidget.Refresh()
+}
+
 // Status indicator (✓ or ★), star toggles on tap when shown
 type statusIndicator struct {
 	widget.BaseWidget
 	todo     *models.TodoItem
 	onToggle func(toggleStar bool)
+	overlay  *canvas.Rectangle
+	cont     *fyne.Container
 }
 
 func newStatusIndicator(todo *models.TodoItem, onToggle func(bool)) *statusIndicator {
@@ -396,7 +583,9 @@ func (s *statusIndicator) CreateRenderer() fyne.WidgetRenderer {
 	}
 	t := canvas.NewText(txt, col)
 	t.TextSize = 20
-	return widget.NewSimpleRenderer(container.NewCenter(t))
+	s.overlay = canvas.NewRectangle(color.NRGBA{R: 0, G: 0, B: 0, A: 0})
+	s.cont = container.NewMax(container.NewCenter(t), s.overlay)
+	return widget.NewSimpleRenderer(s.cont)
 }
 
 func (s *statusIndicator) Tapped(*fyne.PointEvent) {
@@ -410,6 +599,11 @@ func (s *statusIndicator) MinSize() fyne.Size { return fyne.NewSize(20, 20) }
 // SetOnTodoSelected sets the callback for when a todo is selected
 func (t *Timeline) SetOnTodoSelected(callback func(*models.TodoItem, time.Time)) {
 	t.onTodoSelected = callback
+}
+
+// SetOnReorderFinished sets callback when drag/reorder ends
+func (t *Timeline) SetOnReorderFinished(callback func()) {
+	t.onReorderFinished = callback
 }
 
 // ScrollToTop scrolls to the top of the timeline

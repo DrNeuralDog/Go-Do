@@ -35,3 +35,19 @@ var redCrossSVG = []byte(`<?xml version="1.0" encoding="UTF-8"?>
 </svg>`)
 
 var RedCrossIcon fyne.Resource = fyne.NewStaticResource("red-cross.svg", redCrossSVG)
+
+// Arrow up/down icons for spinners (16x16)
+var arrowUpSVG = []byte(`<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
+  <path d="M8 3l5 6H9v4H7V9H3l5-6z" fill="#666"/>
+  <path fill="none" d="M0 0h16v16H0z"/>
+</svg>`)
+
+var arrowDownSVG = []byte(`<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
+  <path d="M8 13l-5-6h4V3h2v4h4l-5 6z" fill="#666"/>
+  <path fill="none" d="M0 0h16v16H0z"/>
+</svg>`)
+
+var ArrowUpIcon fyne.Resource = fyne.NewStaticResource("arrow-up.svg", arrowUpSVG)
+var ArrowDownIcon fyne.Resource = fyne.NewStaticResource("arrow-down.svg", arrowDownSVG)

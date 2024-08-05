@@ -14,29 +14,44 @@ type LightSoftTheme struct{}
 func NewLightSoftTheme() fyne.Theme { return &LightSoftTheme{} }
 
 func (t *LightSoftTheme) Color(name fyne.ThemeColorName, _ fyne.ThemeVariant) color.Color {
+	// Define color palette
+	bg := hex("#3c3c3c")       // main background - gray matching window gradient
+	fg := hex("#3c3836")       // DARK text for main window (tasks, menus)
+	inputBg := hex("#ffffff")  // white inputs for contrast
+	primary := hex("#ff8c42")  // accent/add-button
+	separator := hex("#d0d0d0") // borders
+	placeholder := hex("#aaaaaa") // lighter muted text for visibility on gray
+	hoverColor := hex("#ffd27a") // hover state
+
 	switch name {
 	case theme.ColorNameBackground:
-		// Force dark app background to avoid light bleed outside cards
-		return color.NRGBA{R: 0x28, G: 0x28, B: 0x28, A: 0xFF} // #282828
+		return bg // gray background for all dialogs/windows
+	case theme.ColorNameOverlayBackground:
+		return bg // dialog overlay background - same gray
+	case theme.ColorNameMenuBackground:
+		return inputBg // white background for popup menus
 	case theme.ColorNameForeground:
-		return color.NRGBA{R: 0x3C, G: 0x38, B: 0x36, A: 0xFF} // #3c3836 main text
+		return fg // DARK text for main window
 	case theme.ColorNameSeparator:
-		return color.NRGBA{R: 0xD0, G: 0xD0, B: 0xD0, A: 0xFF} // #d0d0d0 task-item border (darker for visibility)
+		return separator // borders
 	case theme.ColorNameInputBackground:
-		// Use dark panel for containers/cards to match overall dark background
-		return color.NRGBA{R: 0x3C, G: 0x38, B: 0x36, A: 0xFF} // #3c3836
+		return inputBg // white inputs
 	case theme.ColorNamePrimary:
-		return color.NRGBA{R: 0xFF, G: 0x8C, B: 0x42, A: 0xFF} // #ff8c42 accent/add-button
+		return primary // accent
 	case theme.ColorNameButton:
-		return color.NRGBA{R: 0xFF, G: 0x8C, B: 0x42, A: 0xFF} // #ff8c42 nav/theme bg
+		return primary // buttons
 	case theme.ColorNamePlaceHolder:
-		return color.NRGBA{R: 0x66, G: 0x66, B: 0x66, A: 0xFF} // #666 task-time
+		return placeholder // lighter muted text
 	case theme.ColorNameHover:
-		return color.NRGBA{R: 0xFF, G: 0xD2, B: 0x7A, A: 0xFF} // Approx hover
+		return hoverColor // hover
 	case theme.ColorNameFocus:
-		return color.NRGBA{R: 0xFF, G: 0x8C, B: 0x42, A: 0xFF} // #ff8c42 focus
+		return primary // focus
 	case theme.ColorNameSelection:
-		return color.NRGBA{R: 0xD0, G: 0xD0, B: 0xD0, A: 0xFF} // #d0d0d0 checkbox border
+		return separator // selection
+	case theme.ColorNameDisabled:
+		return hex("#999999") // disabled state
+	case theme.ColorNameDisabledButton:
+		return hex("#cccccc") // disabled buttons
 	default:
 		return theme.LightTheme().Color(name, theme.VariantLight)
 	}

@@ -23,9 +23,9 @@ type PomodoroWindow struct {
 	// UI components
     timerCanvas    *canvas.Text
     stateCanvas    *canvas.Text
-    startBtn       *widget.Button
-    pauseBtn       *widget.Button
-    resetBtn       *widget.Button
+    startBtn       *SimpleRectButton
+    pauseBtn       *SimpleRectButton
+    resetBtn       *SimpleRectButton
     sessionsCanvas *canvas.Text
 
 	// Configuration inputs
@@ -54,11 +54,6 @@ func NewPomodoroWindow(app fyne.App, isGruvbox bool) *PomodoroWindow {
 	pw.setupUI()
 	pw.startTicker()
 	pw.tick() // initial update
-
-	// Handle window close
-	pw.window.SetOnClosed(func() {
-		pw.stopTicker()
-	})
 
 	return pw
 }
@@ -97,14 +92,19 @@ func (pw *PomodoroWindow) setupUI() {
     pw.sessionsCanvas = canvas.NewText("Sessions: 0", titleColor)
     pw.sessionsCanvas.TextSize = 16
 
-	// Control buttons
-	pw.startBtn = widget.NewButton("Start", pw.onStartClicked)
-	pw.startBtn.Importance = widget.HighImportance
-
-	pw.pauseBtn = widget.NewButton("Pause", pw.onPauseClicked)
-	pw.pauseBtn.Disable()
-
-	pw.resetBtn = widget.NewButton("Reset", pw.onResetClicked)
+    // Control buttons (match theme button styles from main window)
+    var btnBg, btnFg color.Color
+    if _, ok := fyne.CurrentApp().Settings().Theme().(*LightSoftTheme); ok {
+        btnBg = hex("#ff8c42")
+        btnFg = color.White
+    } else {
+        btnBg = hex("#504945")
+        btnFg = hex("#fabd2f")
+    }
+    pw.startBtn = NewSimpleRectButton("Start", btnBg, btnFg, fyne.NewSize(90, 36), 8, pw.onStartClicked)
+    pw.pauseBtn = NewSimpleRectButton("Pause", btnBg, btnFg, fyne.NewSize(90, 36), 8, pw.onPauseClicked)
+    pw.pauseBtn.Disable()
+    pw.resetBtn = NewSimpleRectButton("Reset", btnBg, btnFg, fyne.NewSize(90, 36), 8, pw.onResetClicked)
 
 	buttonRow := container.NewHBox(
 		pw.startBtn,
@@ -240,21 +240,21 @@ func (pw *PomodoroWindow) tick() {
 	// Update button states
     switch pw.timer.State {
 	case models.PomodoroIdle:
-		pw.startBtn.Enable()
-		pw.pauseBtn.Disable()
-		pw.resetBtn.Disable()
-		pw.startBtn.SetText("Start")
+        pw.startBtn.Enable()
+        pw.pauseBtn.Disable()
+        pw.resetBtn.Disable()
+        pw.startBtn.SetText("Start")
 	case models.PomodoroWork, models.PomodoroShortBreak, models.PomodoroLongBreak:
-		pw.startBtn.Disable()
-		pw.pauseBtn.Enable()
-		pw.resetBtn.Enable()
-		pw.pauseBtn.SetText("Pause")
+        pw.startBtn.Disable()
+        pw.pauseBtn.Enable()
+        pw.resetBtn.Enable()
+        pw.pauseBtn.SetText("Pause")
 	case models.PomodoroPaused:
-		pw.startBtn.Enable()
-		pw.pauseBtn.Enable()
-		pw.resetBtn.Enable()
-		pw.startBtn.SetText("Resume")
-		pw.pauseBtn.SetText("Resume")
+        pw.startBtn.Enable()
+        pw.pauseBtn.Enable()
+        pw.resetBtn.Enable()
+        pw.startBtn.SetText("Resume")
+        pw.pauseBtn.SetText("Resume")
 	}
 }
 
@@ -287,4 +287,26 @@ func (pw *PomodoroWindow) onResetClicked() {
 // Show displays the window
 func (pw *PomodoroWindow) Show() {
 	pw.window.Show()
+}
+
+// SetOnClosed sets the callback for when the window is closed
+func (pw *PomodoroWindow) SetOnClosed(callback func()) {
+	pw.window.SetOnClosed(func() {
+		pw.stopTicker()
+		if callback != nil {
+			callback()
+		}
+	})
+}
+
+// UpdateTheme updates the theme of the pomodoro window
+func (pw *PomodoroWindow) UpdateTheme(isGruvbox bool) {
+	pw.isGruvbox = isGruvbox
+
+	// Update the app theme first (should already be done by MainWindow)
+	// Then recreate the UI with new colors
+	pw.setupUI()
+
+	// Preserve timer state and refresh display
+	pw.tick()
 }
