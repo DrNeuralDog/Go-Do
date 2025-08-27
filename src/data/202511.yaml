@@ -7,21 +7,10 @@ todos:
       kind: 0
       level: 0
       todotime: 2025-11-17T21:02:46.6410367+03:00
-      done: false
-      warntime: 0
-      starred: true
-      order: 3
-    - name: gfdfgdfg
-      content: ""
-      place: ""
-      label: ""
-      kind: 0
-      level: 0
-      todotime: 2025-11-17T21:02:31.2979751+03:00
       done: true
       warntime: 0
       starred: false
-      order: 4
+      order: 2
     - name: gdfgerg
       content: ""
       place: ""
@@ -32,7 +21,7 @@ todos:
       done: false
       warntime: 0
       starred: true
-      order: 2
+      order: 3
     - name: ' вапвап'
       content: ""
       place: ""

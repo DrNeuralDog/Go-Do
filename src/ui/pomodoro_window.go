@@ -72,10 +72,10 @@ func NewPomodoroWindow(app fyne.App, isGruvbox bool) *PomodoroWindow {
 
 // setupUI initializes the user interface
 func (pw *PomodoroWindow) setupUI() {
-	// Window properties
-	pw.window.Resize(fyne.NewSize(200, 350))
-	pw.window.SetFixedSize(true)
-	pw.window.CenterOnScreen()
+	// Window properties will be set after animation
+	// pw.window.Resize(fyne.NewSize(200, 350))
+	// pw.window.SetFixedSize(true)
+	// pw.window.CenterOnScreen()
 
 	// Get colors based on theme (match main window)
 	var bgStart, bgEnd color.Color
@@ -247,6 +247,10 @@ func (pw *PomodoroWindow) setupUI() {
 	finalContent := container.NewMax(background, paddedContent)
 
 	pw.window.SetContent(finalContent)
+	pw.window.SetFixedSize(true)
+	pw.window.Resize(fyne.NewSize(200, 350))
+	pw.window.CenterOnScreen()
+	pw.window.Show()
 }
 
 // startTicker starts the timer update ticker
@@ -674,3 +678,4 @@ func (pw *PomodoroWindow) UpdateTheme(isGruvbox bool) {
 	// Preserve timer state and refresh display
 	pw.tick()
 }
+

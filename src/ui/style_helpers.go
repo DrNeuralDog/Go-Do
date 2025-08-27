@@ -133,8 +133,10 @@ func (b *RoundIconButton) Tapped(*fyne.PointEvent) {
 	b.Refresh()
 	go func() {
 		time.Sleep(120 * time.Millisecond)
-		b.Bg = orig
-		b.Refresh()
+		runOnMainThread(func() {
+			b.Bg = orig
+			b.Refresh()
+		})
 	}()
 	if b.OnTapped != nil {
 		b.OnTapped()
@@ -371,8 +373,10 @@ func (b *SimpleRectButton) Tapped(*fyne.PointEvent) {
 	b.Refresh()
 	go func() {
 		time.Sleep(120 * time.Millisecond)
-		b.Bg = orig
-		b.Refresh()
+		runOnMainThread(func() {
+			b.Bg = orig
+			b.Refresh()
+		})
 	}()
 	if b.OnTapped != nil {
 		b.OnTapped()
@@ -544,8 +548,10 @@ func (cs *CustomSelect) Tapped(_ *fyne.PointEvent) {
 	cs.Refresh()
 	go func(s *CustomSelect) {
 		time.Sleep(120 * time.Millisecond)
-		s.pressed = false
-		s.Refresh()
+		runOnMainThread(func() {
+			s.pressed = false
+			s.Refresh()
+		})
 	}(cs)
 	// Create a popup menu with options
 	items := make([]*fyne.MenuItem, len(cs.Options))
@@ -649,8 +655,10 @@ func (b *TinyIconButton) Tapped(*fyne.PointEvent) {
 	// Animate back to normal after 120ms
 	go func() {
 		time.Sleep(120 * time.Millisecond)
-		b.pressed = false
-		b.Refresh()
+		runOnMainThread(func() {
+			b.pressed = false
+			b.Refresh()
+		})
 	}()
 }
 
