@@ -1,6 +1,9 @@
 package models
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // ViewMode represents different filtering modes for the todo list
 type ViewMode int
@@ -25,6 +28,38 @@ func (v ViewMode) GetLabel() string {
 		return "Important"
 	default:
 		return "All"
+	}
+}
+
+// String converts a ViewMode to its persisted string value.
+func (v ViewMode) String() string {
+	switch v {
+	case ViewAll:
+		return "all"
+	case ViewIncomplete:
+		return "incomplete"
+	case ViewComplete:
+		return "complete"
+	case ViewStarred:
+		return "starred"
+	default:
+		return "incomplete"
+	}
+}
+
+// ViewModeFromString returns a ViewMode from its string representation.
+func ViewModeFromString(s string) ViewMode {
+	switch strings.ToLower(s) {
+	case "all":
+		return ViewAll
+	case "incomplete":
+		return ViewIncomplete
+	case "complete":
+		return ViewComplete
+	case "starred":
+		return ViewStarred
+	default:
+		return ViewIncomplete
 	}
 }
 

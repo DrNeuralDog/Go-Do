@@ -76,7 +76,9 @@ func (a *Application) RunMigration() error {
 
 // CreateMainUI creates and initializes the main user interface
 func (a *Application) CreateMainUI() {
-	ui.NewMainWindow(a.window, a.dataDir)
+	dataManager := persistence.NewMonthlyManager(a.dataDir)
+	configManager := persistence.NewConfigManager(a.dataDir)
+	ui.NewMainWindow(a.window, dataManager, configManager)
 }
 
 // Run starts the application event loop
