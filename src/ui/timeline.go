@@ -291,7 +291,7 @@ func (r *timelineRenderer) createTodoItem(todo *models.TodoItem) fyne.CanvasObje
 	timeText.TextSize = 18
 	timeLabel := verticallyCenterCompact(timeText)
 
-	// Status: ✓ if done, else ★ if starred; toggle star on tap when not done
+	//Status indicator
 	status := newStatusIndicator(todo, func(toggleStar bool) {
 		if toggleStar {
 			updated := *todo
@@ -517,7 +517,7 @@ func (t *Timeline) confirmDelete(todo *models.TodoItem) {
 	currentTheme := fyne.CurrentApp().Settings().Theme()
 	isLightTheme := helpers.IsLightTheme()
 	messageColor := helpers.ToNRGBA(theme.Color(theme.ColorNameForeground))
-overrideTheme := &foregroundOverrideTheme{
+	overrideTheme := &foregroundOverrideTheme{
 		base:         currentTheme,
 		headingDelta: 5,
 		textDelta:    5,
@@ -601,11 +601,11 @@ func (t *Timeline) showError(err error) {
 }
 
 type foregroundOverrideTheme struct {
-	base              fyne.Theme
-	overrideColor     color.Color
+	base               fyne.Theme
+	overrideColor      color.Color
 	overrideForeground bool
-	headingDelta      float32
-	textDelta         float32
+	headingDelta       float32
+	textDelta          float32
 }
 
 func (t *foregroundOverrideTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) color.Color {

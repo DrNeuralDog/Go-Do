@@ -8,6 +8,7 @@ import (
 
 	"godo/src/models"
 	"godo/src/ui/helpers"
+	"godo/src/ui/widgets"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -25,16 +26,16 @@ type PomodoroWindow struct {
 	// UI components
 	timerCanvas    *canvas.Text
 	stateCanvas    *canvas.Text
-	startBtn       *SimpleRectButton
-	pauseBtn       *SimpleRectButton
-	resetBtn       *SimpleRectButton
+	startBtn       *widgets.SimpleRectButton
+	pauseBtn       *widgets.SimpleRectButton
+	resetBtn       *widgets.SimpleRectButton
 	sessionsCanvas *canvas.Text
 	progressRing   *ProgressRing
 
 	// Configuration inputs
-	workSpinner       *NumberSpinner
-	shortBreakSpinner *NumberSpinner
-	longBreakSpinner  *NumberSpinner
+	workSpinner       *widgets.NumberSpinner
+	shortBreakSpinner *widgets.NumberSpinner
+	longBreakSpinner  *widgets.NumberSpinner
 
 	// Timer animation
 	anim           *fyne.Animation
@@ -158,7 +159,7 @@ func (pw *PomodoroWindow) setupUI() {
 		pw.tick()
 	})
 	spinnerVerticalOffset := pw.workSpinner.MinSize().Height * 0.2
-	wrapSpinner := func(spinner *NumberSpinner) fyne.CanvasObject {
+	wrapSpinner := func(spinner *widgets.NumberSpinner) fyne.CanvasObject {
 		return container.NewVBox(
 			helpers.CreateSpacer(1, spinnerVerticalOffset),
 			spinner,
