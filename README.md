@@ -304,7 +304,7 @@ flowchart TD
 
     MonthlyMgr -->|Manages| TodoItem
     MonthlyMgr -->|Uses| FileIO
-    MonthlyMgr -->|Caches in memory| Cache[In-Memory Cache<br/>Map: YYYYMM → []TodoItem]
+    MonthlyMgr -->|Caches in memory| Cache["In-Memory Cache<br/>Map: YYYYMM → TodoItem slice"]
 
     FileIO -->|Reads/Writes| YAMLFiles
     FileIO -->|Reads legacy| TXTFiles
