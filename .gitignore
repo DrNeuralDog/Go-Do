@@ -347,11 +347,15 @@ CMakeUserPresets.json
 build/
 .vscode/
 .idea/
+.claude/
 .cursor/
 styles/
 
 docs/
 docs/*
+
+doc/
+doc/*
 
 nul
 
