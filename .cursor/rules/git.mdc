@@ -1,0 +1,94 @@
+---
+description: Правила автоматической работа агента с гитом и версионированием изменений - по факту это делает из агента продвинутый и контекстнозависимый batch скрипт 
+alwaysApply: false
+---
+
+
+# Git Workflow for AI Development Agent
+
+## Primary Directive
+You are a development agent managing Git operations for the project and its subprojects (excluding `common` and `proto`) after each user request, ensuring proper versioning, committing, pushing changes, and logging to `\docs\WorkflowLogs\GitLog.md` while adhering to strict rules to avoid unauthorized actions.
+
+## Versioning Rules
+- **Version Format**: `<BranchName> Version <Release>.<Stage>.<Feature>.<Patch> - <Commit Message>`
+  - **Release**: Default is `0` unless specified otherwise.
+  - **Stage**: Default is `4`. At the start of each operation, confirm with the developer if this is still valid.
+  - **Feature**: Tracks completed and tested functionality. Confirm with the developer if this number needs updating.
+  - **Patch**: Increments by `1` with each commit unless a higher version number (Release, Stage, or Feature) is incremented, in which case Patch resets to `0`.
+  - **Optional Subversions**: Additional version nдmbers can be appended with dots (e.g., `0.4.2.3.1`) if needed, as specified by the developer.
+- Version information **must** be included at the start of every commit message, followed by a detailed description of changes.
+
+
+## Git Workflow Process
+
+### 1. Post-Request Git Operations
+- After successfully completing a user request, the AI agent **must** initiate Git operations to commit and push changes.
+- **Always** operate on the current branch (determined via `git branch --show-current`).
+
+### 2. Pre-Commit Checks
+- **Check Versioning**:
+  - Use `git log`, `git status`, and `git branch` to determine the current branch and latest version.
+  - Prompt the developer to confirm or update:
+    - The **Stage** version (default: `4`).
+    - The **Feature** version (based on completed functionality).
+    - Whether additional subversions are needed.
+  - Increment the **Patch** version by `1` unless a higher version number is updated.
+- **Check for Remote Changes**:
+  - Run `git fetch` to check for updates on the remote branch.
+  - If changes exist on the remote branch:
+    - Run `git pull --no-rebase` to download changes.
+    - Prompt the developer to:
+      - Prioritize local or remote changes.
+      - Resolve conflicts manually if any arise.
+    - **Never** attempt to resolve merge conflicts autonomously.
+- **Subproject Handling**:
+  - Identify all subprojects with changes using `git status`.
+  - **Exclude** `common` and `proto` subprojects:
+    - Do **not** run `git pull`, `git commit`, or `git push` in these directories.
+    - These are managed manually by the developer.
+  - For all other subprojects with changes, apply the same Git workflow as the main project.
+
+### 3. Commit Process
+- Generate a commit message in the format: `<BranchName> Version <Release>.<Stage>.<Feature>.<Patch> - <Detailed description of changes>`.
+- Present the commit message to the developer for review.
+- **Wait** for developer confirmation before proceeding with the commit.
+- Run `git add .` to stage all changes in the current project and applicable subprojects.
+- Execute `git commit -m "<Commit Message>"` once approved.
+
+### 4. Push Process
+- After committing, run `git push origin <CurrentBranch>` to send changes to the remote repository.
+- If the push fails (e.g., due to remote changes), repeat the "Check for Remote Changes" step and follow developer instructions.
+
+### 5. Git Log Maintenance
+- After a successful push to the remote branch, append an entry to `\docs\WorkflowLogs\GitLog.md`.
+- Each entry must follow this format:
+    - **Sequential Number**: Increment based on the previous entry in `GitLog.md`.
+    - **Timestamp**: Record the current date and time (e.g., `2025-07-22 15:07:00 CEST`).
+    - **Short Commit Description**: A concise summary of the changes (without the version prefix, max 50 characters).
+- Example entry:
+        [<Sequential Number>] <BranchName> Version <Release>.<Stage>.<Feature>.<Patch> - <Timestamp> - <Short Commit Description>
+
+### 6. Safety Rules
+- **Never** modify, commit, or push changes in the `common` or `proto` subprojects.
+- **Never** attempt to resolve merge conflicts without developer intervention.
+- **Always** confirm versioning and commit messages with the developer before finalizing Git operations.
+- If any errors occur during Git operations, log them and notify the developer immediately without proceeding.
+
+## Example Commit Message
+- For a branch named `feature/login` with a Stage version of `4`, Feature version of `2`, and Patch version incrementing to `3`:
+    feature/login Version 0.4.2.3 - Implemented user authentication API and updated login UI
+
+
+## Example GitLog Entry
+- feature/login Version 0.4.2.3 - 2025-07-22 15:07:00 CEST - Implemented auth API and login UI
+
+
+## Developer Interaction
+- Before each commit, display:
+  - Current branch name.
+  - Proposed version number (e.g., `0.4.2.3`).
+  - List of changed files and subprojects (excluding `common` and `proto`).
+  - Proposed commit message.
+- Wait for developer approval or modifications to the version or message.
+- If remote changes are detected, prompt the developer with options to prioritize local/remote changes or resolve conflicts manually.
+

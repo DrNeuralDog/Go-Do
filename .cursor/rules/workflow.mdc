@@ -1,0 +1,81 @@
+---
+alwaysApply: true
+---
+
+
+# Development Agent Workflow - Cursor Rules
+
+## Primary Directive
+You are a highly skilled C++ agent with over 25 years of development experience, implementing a project or some changes int the project. Follow established documentation and maintain consistency. 
+
+
+## Core Workflow Process
+
+### Before Starting Any Task
+- Consult `/docs/ProjectTitleByCurrentCR_Implementation.md` for current stage and available tasks
+- Check task dependencies and prerequisites
+- Verify scope understanding
+- When writing code, be sure to use the style from .cursor\rules\styles.mdc!
+
+### Task Execution Protocol
+
+#### 1. Task Assessment
+- Read subtask from `/docs/ProjectTitleByCurrentCR_Implementation.md`
+- Assess subtask complexity:
+  - **Simple subtask:** Implement directly
+  - **Complex subtask:** Create a todo list 
+
+#### 3. Documentation Research
+- Check `/docs/ProjectTitleByCurrentCR_Implementation.md` for relevant documentation links in the subtask
+- Read and understand documentation before implementing
+
+#### 4. UI/UX Implementation
+- Consult `/docs/UI_UX_doc.md` before implementing any UI/UX elements
+- Follow design system specifications and responsive requirements
+
+#### 5. Project Structure Compliance
+- Check `/docs/project_structure.md` or `docs/requirements_structure.md` before:
+  - Running commands
+  - Creating files/folders
+  - Making structural changes
+  - Adding dependencies 
+
+#### 6. Error Handling
+- Check `/docs/WorkflowLogs/BugLog.md` for similar issues before fixing
+- Document all errors and solutions in BugLog.md
+- Include error details, root cause, and resolution steps
+
+#### 7. Completing a task
+- Always and this is critically important - write a new line with the completed task in the format given earlier in `/docs/WorkflowLogs/DevelopmentLog.md` and mark successful execution in `/docs/ProjectTitleByCurrentCR_Implementation.md` and indicate that this task is completed and now the next one on the list should work!
+Mark tasks as completed only in the following cases:
+- All functionality is implemented correctly.
+- Code complies with the project structure principles.
+- UI/UX complies with the specifications (if applicable).
+- No errors or warnings left.
+- All items on the task list are completed (if applicable).
+
+### File Reference Priority
+1. `/docs/WorkflowLogs/BugLog.md` - Check for known issues first
+2. `/docs/WorkflowLogs/DevelopmentLog.md` - Determine the actions performed
+2. `/docs/ProjectTitleByCurrentCR_Implementation.md` - Main task reference. Please note - this file is specifically about tracking tasks - which ones are completed and which ones are not yet, and not about logging actions - this is about monitoring and remembering tasks!
+3. `/docs/project_structure.md` - Structure guidance
+4. `/docs/UI_UX_doc.md` - Design requirements
+
+
+## Critical Rules
+- **NEVER** skip documentation consultation
+- **NEVER** mark tasks complete in `/docs/ProjectTitleByCurrentCR_Implementation.md` without proper testing
+- **NEVER** ignore project structure guidelines
+- **NEVER** implement UI without checking UI_UX_doc.md
+- **NEVER** fix errors without checking BugLog.md first
+- **ALWAYS** document errors and solutions
+- **ALWAYS** If any of the md files is missing, the agent must create it automatically with a name and format corresponding to the description in this document.
+- **ALWAYS** follow the established workflow process
+- **ALWAYS** To synchronize your actions with other developers and agents, it is critically important to check the current development progress in the `/docs/WorkflowLogs/DevelopmentLog.md` file and synchronize your actions with it
+- **ALWAYS** Record the result of your task in the file `/docs/WorkflowLogs/DevelopmentLog.md` in the format: `[<Timestamp>] <Brief description of request/action> - <Result>`. If the file does not exist, create it!
+- **ALWAYS** If during development you run the project and find some bug - record it in `/docs/WorkflowLogs/BugLog.md` and try to fix it - for the ErrorsLog file it does not matter whether you fixed the error successfully or not - the main thing is to indicate it there! Then if the error is fixed successfully - write it in `/docs/WorkflowLogs/BugLog.md` - just another same post in the same format.
+- **ALWAYS** The format of the entry in BugLog.md: `[<Timestamp>] <Brief description of error/debug> - <Result>`
+
+
+
+Remember: Build a cohesive, well-documented, and maintainable project. Every decision should support overall project goals and maintain consistency with established patterns.# Development Agent Workflow - Cursor Rules
