@@ -1,3 +1,4 @@
+
 # Todo List Application Migration
 
 A modern, cross-platform todo list application built with Go and Fyne, migrated from the original C++ Qt implementation with complete English localization.
@@ -30,22 +31,26 @@ A modern, cross-platform todo list application built with Go and Fyne, migrated 
 ### Building from Source
 
 1. Clone the repository:
+
 ```bash
 git clone <repository-url>
 cd todo-list-migration
 ```
 
 2. Install dependencies:
+
 ```bash
 go mod tidy
 ```
 
 3. Build the application:
+
 ```bash
 go build -o bin/todo-list src/main.go
 ```
 
 4. Run the application:
+
 ```bash
 ./bin/todo-list
 ```
@@ -91,6 +96,7 @@ GOOS=linux GOARCH=amd64 go build -o bin/todo-list-linux src/main.go
 ### Data Storage
 
 Todos are automatically saved to monthly files in the `data/` directory:
+
 - `data/202501.txt` for January 2025
 - `data/202502.txt` for February 2025
 - etc.
@@ -126,6 +132,7 @@ go test ./tests/...
 ### Code Quality
 
 The codebase follows Go best practices and includes:
+
 - Comprehensive unit tests
 - Error handling with user-friendly messages
 - Memory-efficient data structures
@@ -192,6 +199,7 @@ This project maintains the same license as the original application.
 ## Support
 
 For issues and questions:
+
 - Check the documentation in `docs/`
 - Review existing issues
 - Create new issues with detailed descriptions
@@ -199,3 +207,8 @@ For issues and questions:
 ---
 
 *Built with ❤️ using Go and Fyne - A modern take on the classic Todo List application*
+======================================================================================
+
+# Go-Do
+
+To Do list that motivates action - Go Do
