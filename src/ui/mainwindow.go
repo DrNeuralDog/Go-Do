@@ -153,6 +153,8 @@ func (mw *MainWindow) setupUI() {
 	mw.titleLabel = widget.NewLabel(localization.GetString("window_title") + " - User")
 	mw.titleLabel.Alignment = fyne.TextAlignCenter
 	mw.titleLabel.TextStyle = fyne.TextStyle{Bold: true}
+	// Disable wrapping to prevent the label from changing size
+	mw.titleLabel.Wrapping = fyne.TextTruncate
 
 	mw.addButton = widget.NewButtonWithIcon("", theme.ContentAddIcon(), mw.onAddButtonClicked)
 	mw.addButton.Importance = widget.HighImportance
@@ -196,9 +198,13 @@ func (mw *MainWindow) setupUI() {
 	mw.themeBtn = widget.NewButton("Gruvbox", mw.onThemeToggleClicked)
 
 	// Prepare fixed-width wrappers for symmetry
-	selSize := fyne.NewSize(140, mw.viewModeSel.MinSize().Height)
+	// Use a larger fixed width to accommodate all view mode labels without resizing
+	selSize := fyne.NewSize(150, mw.viewModeSel.MinSize().Height)
 	btnSize := fyne.NewSize(140, mw.themeBtn.MinSize().Height)
-	selWrap := container.NewGridWrap(selSize, mw.viewModeSel)
+
+	// Wrap Select in a Max container to prevent it from changing size
+	selContainer := container.NewMax(mw.viewModeSel)
+	selWrap := container.NewGridWrap(selSize, selContainer)
 	btnWrap := container.NewGridWrap(btnSize, mw.themeBtn)
 	spacer := func(w float32) *canvas.Rectangle {
 		r := canvas.NewRectangle(color.NRGBA{R: 0, G: 0, B: 0, A: 0})
@@ -298,6 +304,13 @@ func (mw *MainWindow) refreshView() {
 	// Update view mode button
 	mw.viewModeBtn.SetText(mw.viewMode.GetLabel())
 
+	// Store current window content size before any updates
+	var targetSize fyne.Size
+	if content := mw.window.Content(); content != nil {
+		targetSize = content.Size()
+		fmt.Printf("[MainWindow.refreshView] Stored window content size: %v\n", targetSize)
+	}
+
 	// Update timeline data (without triggering refresh yet)
 	fmt.Printf("[MainWindow.refreshView] Timeline size before update: %v\n", mw.timeline.Size())
 	mw.timeline.SetDate(mw.currentDate)
@@ -307,6 +320,9 @@ func (mw *MainWindow) refreshView() {
 
 	// Single refresh at the end to avoid multiple layout recalculations
 	mw.timeline.Refresh()
+
+	// DO NOT call content.Refresh() here! It triggers async layout recalculation
+	// that causes the UI to shrink. Timeline already refreshed itself above.
 
 	fmt.Printf("[MainWindow.refreshView] ===== END =====\n\n")
 }
