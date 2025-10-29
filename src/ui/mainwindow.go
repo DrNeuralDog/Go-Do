@@ -33,9 +33,13 @@ type MainWindow struct {
 	addButton   *widget.Button
 	prevButton  *widget.Button
 	nextButton  *widget.Button
-	viewModeBtn *widget.Button
-	themeBtn    *widget.Button
-	viewModeSel *widget.Select
+	viewModeBtn *widget.Button // legacy hidden
+	themeBtn    *widget.Button // legacy hidden
+	// Styled controls
+	dropdownBtn  *SimpleRectButton
+	prevRectBtn  *SimpleRectButton
+	nextRectBtn  *SimpleRectButton
+	themeRectBtn *SimpleRectButton
 
 	// State
 	currentDate *utils.CustomDate
@@ -50,7 +54,7 @@ func NewMainWindow(window fyne.Window, dataDir string) *MainWindow {
 		window:      window,
 		dataManager: persistence.NewMonthlyManager(dataDir),
 		currentDate: utils.GetCurrentDate(),
-		viewMode:    models.ViewAll,
+		viewMode:    models.ViewIncomplete,
 		isGruvbox:   false,
 	}
 
@@ -144,9 +148,9 @@ func (mw *MainWindow) findAndSetCurrentDateFromDataFile() {
 
 // setupUI initializes the user interface
 func (mw *MainWindow) setupUI() {
-	// Set window properties
+	// Set window properties - matching mockup dimensions
 	mw.window.SetTitle(localization.GetString("window_title"))
-	mw.window.Resize(fyne.NewSize(420, 600))
+	mw.window.Resize(fyne.NewSize(420, 800))
 	mw.window.SetFixedSize(true)
 
 	// Create UI components
@@ -156,108 +160,142 @@ func (mw *MainWindow) setupUI() {
 	// Disable wrapping to prevent the label from changing size
 	mw.titleLabel.Wrapping = fyne.TextTruncate
 
+	// Create buttons with icons (for dialogs etc.)
 	mw.addButton = widget.NewButtonWithIcon("", theme.ContentAddIcon(), mw.onAddButtonClicked)
 	mw.addButton.Importance = widget.HighImportance
 
+	// Legacy hidden controls for compatibility
 	mw.prevButton = widget.NewButtonWithIcon("", theme.NavigateBackIcon(), mw.onPrevMonthClicked)
-	mw.prevButton.Importance = widget.HighImportance
+	mw.prevButton.Hide()
 	mw.nextButton = widget.NewButtonWithIcon("", theme.NavigateNextIcon(), mw.onNextMonthClicked)
-	mw.nextButton.Importance = widget.HighImportance
-
-	// Legacy button kept for compatibility with refreshView; hidden from UI
+	mw.nextButton.Hide()
 	mw.viewModeBtn = widget.NewButton(mw.viewMode.GetLabel(), mw.onViewModeClicked)
 	mw.viewModeBtn.Hide()
-
-	// View mode select (combobox)
-	mw.viewModeSel = widget.NewSelect([]string{
-		models.ViewAll.GetLabel(),
-		models.ViewIncomplete.GetLabel(),
-		models.ViewComplete.GetLabel(),
-		models.ViewStarred.GetLabel(),
-	}, func(value string) {
-		switch value {
-		case models.ViewAll.GetLabel():
-			mw.viewMode = models.ViewAll
-		case models.ViewIncomplete.GetLabel():
-			mw.viewMode = models.ViewIncomplete
-		case models.ViewComplete.GetLabel():
-			mw.viewMode = models.ViewComplete
-		case models.ViewStarred.GetLabel():
-			mw.viewMode = models.ViewStarred
-		}
-		mw.loadTodos()
-		mw.refreshView()
-	})
-	mw.viewModeSel.SetSelected(models.ViewAll.GetLabel())
-
 	mw.themeBtn = widget.NewButton("Gruvbox", mw.onThemeToggleClicked)
+	mw.themeBtn.Hide()
 
-	// Prepare fixed-width wrappers for symmetry
-	// Use a larger fixed width to accommodate all view mode labels without resizing
-	selSize := fyne.NewSize(150, mw.viewModeSel.MinSize().Height)
-	btnSize := fyne.NewSize(140, mw.themeBtn.MinSize().Height)
-
-	// Wrap Select in a Max container to prevent it from changing size
-	selContainer := container.NewMax(mw.viewModeSel)
-	selWrap := container.NewGridWrap(selSize, selContainer)
-	btnWrap := container.NewGridWrap(btnSize, mw.themeBtn)
-	spacer := func(w float32) *canvas.Rectangle {
-		r := canvas.NewRectangle(color.NRGBA{R: 0, G: 0, B: 0, A: 0})
-		r.SetMinSize(fyne.NewSize(w, 1))
-		return r
-	}
-	chip := func(obj fyne.CanvasObject) fyne.CanvasObject {
-		bg := canvas.NewRectangle(theme.Color(theme.ColorNameHover))
-		return container.NewMax(bg, container.NewPadded(obj))
+	// --- Background gradient for the whole app area + header/logo/title ---
+	// Get gradient colors from current theme
+	var startColor, endColor color.Color
+	currentTheme := fyne.CurrentApp().Settings().Theme()
+	if lightTheme, ok := currentTheme.(*LightSoftTheme); ok {
+		startColor, endColor = lightTheme.GetHeaderGradientColors()
+	} else if gruvboxTheme, ok := currentTheme.(*GruvboxBlackTheme); ok {
+		startColor, endColor = gruvboxTheme.GetHeaderGradientColors()
+	} else {
+		// Fallback to primary color if theme doesn't support gradients
+		startColor = theme.Color(theme.ColorNamePrimary)
+		endColor = startColor
 	}
 
-	// Order: [Select] [sp] [Prev] | [Title] | [Next] [sp] [Theme]
-	leftGroup := container.NewHBox(chip(selWrap), spacer(16), chip(mw.prevButton))
-	rightGroup := container.NewHBox(chip(mw.nextButton), spacer(16), chip(btnWrap))
+	// Logo: circular outline with checkmark - 54x54px from mockup
+	logoCircle := canvas.NewCircle(color.NRGBA{R: 0, G: 0, B: 0, A: 0})
+	// stroke/text color depends on theme
+	var logoStroke color.Color
+	var logoTextColor color.Color
+	if _, ok := currentTheme.(*LightSoftTheme); ok {
+		logoStroke = color.White
+		logoTextColor = color.White
+	} else {
+		// Gruvbox: use bright yellow accent for both
+		logoStroke = hex("#fabd2f")
+		logoTextColor = hex("#fabd2f")
+	}
+	logoCircle.StrokeColor = logoStroke
+	logoCircle.StrokeWidth = 3
+	logoTxt := canvas.NewText("✓", logoTextColor)
+	logoTxt.TextSize = 26 // Increased for 54px circle
+	logoTxt.TextStyle = fyne.TextStyle{Bold: true}
+	logo := container.NewGridWrap(fyne.NewSize(54, 54), container.NewMax(logoCircle, container.NewCenter(logoTxt)))
 
-	// Make theme toggle more prominent
-	mw.themeBtn.Importance = widget.HighImportance
+	// Title text - 56px from mockup with letter-spacing (simulated via text size)
+	titleTxt := canvas.NewText("GO DO", color.White)
+	titleTxt.TextSize = 56                           // From mockup
+	titleTxt.TextStyle = fyne.TextStyle{Bold: false} // Weight 300 in mockup = light, use normal
 
-	// Create full-width top bar with centered title and controls left/right (no background)
-	topBar := container.NewBorder(
-		nil, nil,
-		leftGroup,
-		rightGroup,
-		container.NewCenter(mw.titleLabel),
+	header := container.NewHBox(logo, CreateSpacer(20, 1), titleTxt)
+
+	// --- Controls row: [Dropdown (cycle)] [←] [→] [Theme] --- strictly per mockup
+	var dropdownBg, dropdownFg, navBg, navFg, themeBg, themeFg color.Color
+	if _, ok := currentTheme.(*LightSoftTheme); ok {
+		dropdownBg = hex("#ffffff")
+		dropdownFg = hex("#3c3836")
+		navBg = hex("#ff8c42")
+		navFg = color.White
+		themeBg = hex("#ff8c42")
+		themeFg = color.White
+	} else {
+		dropdownBg = hex("#3c3836")
+		dropdownFg = hex("#ebdbb2")
+		navBg = hex("#504945")
+		navFg = hex("#fabd2f")
+		themeBg = hex("#504945")
+		themeFg = hex("#fabd2f")
+	}
+
+	// Dropdown cycles through modes on tap
+	mw.dropdownBtn = NewSimpleRectButton(mw.viewMode.GetLabel()+" ▼", dropdownBg, dropdownFg, fyne.NewSize(180, 44), 8, func() {
+		mw.onViewModeClicked()
+		mw.dropdownBtn.SetText(mw.viewMode.GetLabel() + " ▼")
+	})
+
+	mw.prevRectBtn = NewSimpleRectButton("←", navBg, navFg, fyne.NewSize(44, 44), 8, mw.onPrevMonthClicked)
+	mw.nextRectBtn = NewSimpleRectButton("→", navBg, navFg, fyne.NewSize(44, 44), 8, mw.onNextMonthClicked)
+
+	// Theme toggle shows current target
+	themeLabel := "Dark"
+	if mw.isGruvbox {
+		themeLabel = "Light"
+	} else {
+		// current is light by default, button shows Dark
+		themeLabel = "Dark"
+	}
+	mw.themeRectBtn = NewSimpleRectButton(themeLabel, themeBg, themeFg, fyne.NewSize(100, 44), 8, mw.onThemeToggleClicked)
+
+	controls := container.NewHBox(
+		mw.dropdownBtn,
+		CreateSpacer(10, 1),
+		mw.prevRectBtn,
+		CreateSpacer(10, 1),
+		mw.nextRectBtn,
+		CreateSpacer(10, 1),
+		mw.themeRectBtn,
 	)
-	// Add separator under the top bar
-	header := container.NewVBox(topBar, widget.NewSeparator())
 
 	// Set up timeline with current date and view mode
 	mw.timeline.SetDate(mw.currentDate)
 	mw.timeline.SetViewMode(mw.viewMode)
 
-	// Create main content (single scroll managed inside Timeline widget)
-	// Thin border around the panel
-	lineColor := theme.Color(theme.ColorNameSeparator)
-	topLine := canvas.NewRectangle(lineColor)
-	topLine.SetMinSize(fyne.NewSize(1, 1))
-	bottomLine := canvas.NewRectangle(lineColor)
-	bottomLine.SetMinSize(fyne.NewSize(1, 1))
-	leftLine := canvas.NewRectangle(lineColor)
-	leftLine.SetMinSize(fyne.NewSize(1, 1))
-	rightLine := canvas.NewRectangle(lineColor)
-	rightLine.SetMinSize(fyne.NewSize(1, 1))
-	// No background here; background will be applied only under items within timeline
-	panelWithBorder := container.NewBorder(topLine, bottomLine, leftLine, rightLine, mw.timeline)
-	contentCenter := container.NewPadded(panelWithBorder)
+	// Create main content tasks container strictly per mockup
+	timelineCard := CreateTasksContainer(mw.timeline)
+	// Horizontal padding 24px for header and controls, top padding 30px
+	headerPadded := container.NewBorder(nil, nil, CreateSpacer(24, 1), CreateSpacer(24, 1), header)
+	controlsPadded := container.NewBorder(nil, nil, CreateSpacer(24, 1), CreateSpacer(24, 1), controls)
+	timelinePadded := container.NewBorder(nil, nil, CreateSpacer(24, 1), CreateSpacer(24, 1), timelineCard)
 
-	// Square + button at bottom (reduced by ~15%)
-	addWrap := container.NewGridWrap(fyne.NewSize(34, 34), mw.addButton)
-
-	content := container.NewBorder(
-		header,                     // Top
-		container.NewHBox(addWrap), // Bottom
-		nil, nil,                   // Left, Right
-		contentCenter, // Center
+	appBody := container.NewVBox(
+		CreateSpacer(1, 30),
+		headerPadded,
+		CreateSpacer(1, 14),
+		controlsPadded,
+		CreateSpacer(1, 20),
+		timelinePadded,
 	)
 
-	mw.window.SetContent(content)
+	// Floating add button at bottom-center (60x60px from mockup)
+	addButtonRounded := RoundedIconButton(theme.ContentAddIcon(), mw.onAddButtonClicked)
+	addWrap := container.NewGridWrap(fyne.NewSize(60, 60), addButtonRounded)
+
+	// Full-window background gradient per mockup
+	background := NewGradientRect(startColor, endColor, 0)
+	// Stack gradient behind content
+	content := container.NewBorder(
+		nil,
+		container.NewCenter(addWrap), // Centered at bottom per mockup
+		nil, nil,
+		container.NewPadded(appBody),
+	)
+	mw.window.SetContent(container.NewMax(background, content))
 }
 
 func (mw *MainWindow) onThemeToggleClicked() {
@@ -266,9 +304,13 @@ func (mw *MainWindow) onThemeToggleClicked() {
 		fyne.CurrentApp().Settings().SetTheme(NewGruvboxBlackTheme())
 		mw.themeBtn.SetText("Light")
 	} else {
-		fyne.CurrentApp().Settings().SetTheme(theme.LightTheme())
+		fyne.CurrentApp().Settings().SetTheme(NewLightSoftTheme())
 		mw.themeBtn.SetText("Gruvbox")
 	}
+	// Force refresh the entire window to update header gradient
+	mw.setupUI()
+	mw.loadTodos()
+	mw.refreshView()
 }
 
 // loadTodos loads todos for the current month

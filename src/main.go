@@ -14,9 +14,8 @@ import (
 func main() {
 	// Create the application
 	myApp := app.New()
-	// Default theme: Light (user request)
-	// To switch at runtime, use the header toggle in MainWindow
-	// myApp.Settings().SetTheme(ui.NewGruvboxBlackTheme()) // no default dark on startup
+	// Default theme: Soft Light (per mockup)
+	myApp.Settings().SetTheme(ui.NewLightSoftTheme())
 	myWindow := myApp.NewWindow("My Day - Todo List")
 	myWindow.SetMaster()
 

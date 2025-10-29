@@ -350,6 +350,8 @@ build/
 .cursor/
 styles/
 
+docs/
+docs/*
 
 docs/OtherHelpfulFiles/*.txt
 docs/DesignPreview/*.txt
