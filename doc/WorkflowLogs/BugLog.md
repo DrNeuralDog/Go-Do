@@ -15,3 +15,4 @@ This log tracks bugs, errors, and debugging activities during the Todo List appl
 
 [2025-10-02 15:05:00 UTC] Нет зафиксированных ошибок - Проект в начальной стадии разработки
 [2025-10-02 20:30:00 UTC] При первом переключении фильтра (All/Important/Complete) контент сжимается, огромные поля справа и снизу - Исправлено: в `timelineRenderer.Refresh()` создаётся Scroll при nil и вызывается `Layout(r.timeline.Size())` для корректного лэйаута
+[2025-10-29 12:40:00 UTC] `go test ./tests/...` падает: undefined: PriorityLevel/Low/Medium/High/Urgent в tests/models - Требуется синхронизация тестов с актуальной моделью приоритетов

@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Go Do</title>
+<style>
+:root {
+  --accent: #f8a23a;
+  --light-bg-top: linear-gradient(180deg, #ffa94d 0%, #fff6e6 100%);
+  --light-bg-main: #fffaf0;
+  --light-card: #fffdf8;
+  --light-text: #333;
+  --dark-bg-top: linear-gradient(180deg, #3a2b00 0%, #1f1300 100%);
+  --dark-bg-main: #1a1000;
+  --dark-card: #2a1a00;
+  --dark-text: #f6e7c0;
+  --transition: 0.25s ease;
+}
+
+body {
+  margin: 0;
+  font-family: "Inter", sans-serif;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  background: var(--light-bg-top);
+  transition: background var(--transition), color var(--transition);
+}
+
+.app {
+  position: relative;
+  width: 380px;
+  height: 700px;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+  display: flex;
+  flex-direction: column;
+  background: var(--light-bg-main);
+  color: var(--light-text);
+  transition: background var(--transition), color var(--transition);
+}
+
+header {
+  background: transparent;
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+header h1 {
+  font-size: 28px;
+  display: flex;
+  align-items: center;
+  font-weight: 700;
+}
+
+header h1::before {
+  content: "✔";
+  font-size: 24px;
+  margin-right: 8px;
+  color: var(--accent);
+}
+
+.controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 0 24px;
+}
+
+select, button {
+  border: none;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition), transform 0.15s;
+}
+
+button:hover {
+  transform: scale(1.05);
+}
+
+/* Dark Theme */
+.theme-dark {
+  background: var(--dark-bg-top);
+  color: var(--dark-text);
+}
+.theme-dark .app {
+  background: var(--dark-bg-main);
+  color: var(--dark-text);
+}
+.theme-dark .card {
+  background: var(--dark-card);
+}
+.theme-dark select,
+.theme-dark button {
+  background: #3c2800;
+  color: var(--dark-text);
+}
+.theme-dark .task-time,
+.theme-dark .task-title {
+  color: var(--dark-text);
+}
+
+/* Task list */
+.task-list {
+  background: var(--light-card);
+  margin: 20px;
+  border-radius: 15px;
+  padding: 16px;
+  flex-grow: 1;
+  overflow-y: auto;
+  transition: background var(--transition);
+}
+.theme-dark .task-list {
+  background: var(--dark-card);
+}
+.task-date {
+  font-weight: 600;
+  margin-bottom: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.task {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  opacity: 0;
+  transform: translateY(10px);
+  animation: fadeInTask 0.3s ease forwards;
+}
+@keyframes fadeInTask {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.task-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.task-color {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  background: var(--accent);
+}
+.task-title {
+  font-size: 15px;
+}
+.task-time {
+  font-size: 14px;
+  opacity: 0.8;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Add button */
+.add-btn {
+  position: absolute;
+  bottom: 20px;
+  left: 24px;
+  background: var(--accent);
+  border: none;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  font-size: 32px;
+  color: white;
+  cursor: pointer;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.25);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.add-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 14px rgba(0,0,0,0.3);
+}
+
+/* Input field */
+.add-task-field {
+  display: none;
+  position: absolute;
+  bottom: 90px;
+  left: 24px;
+  width: calc(100% - 48px);
+}
+.add-task-field input {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 2px solid var(--accent);
+  outline: none;
+  font-size: 15px;
+}
+.show-input .add-task-field {
+  display: block;
+  animation: fadeIn 0.25s ease;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Go Do</h1>
+  </header>
+
+  <div class="controls">
+    <select>
+      <option>Incomplete</option>
+      <option>Complete</option>
+    </select>
+    <button>&larr;</button>
+    <button>&rarr;</button>
+    <button id="themeButton">Gruvbox</button>
+  </div>
+
+  <div class="task-list">
+    <div class="task-date">2025/10/28 Tuesday <span>+</span></div>
+    <div class="task">
+      <div class="task-left">
+        <div class="task-color"></div>
+        <div class="task-title">орнепанроен</div>
+      </div>
+      <div class="task-time">20:19 ✔</div>
+    </div>
+    <div class="task">
+      <div class="task-left">
+        <div class="task-color"></div>
+        <div class="task-title">sdfsdf</div>
+      </div>
+      <div class="task-time">20:18 ★</div>
+    </div>
+  </div>
+
+  <div class="add-task-field">
+    <input type="text" id="newTaskInput" placeholder="Enter new task..." />
+  </div>
+  <button class="add-btn" id="addBtn">+</button>
+</div>
+
+<script>
+const themeButton = document.getElementById("themeButton");
+const body = document.body;
+themeButton.addEventListener("click", () => {
+  const dark = body.classList.toggle("theme-dark");
+  themeButton.textContent = dark ? "Light" : "Gruvbox";
+});
+
+const addBtn = document.getElementById("addBtn");
+const app = document.querySelector(".app");
+const inputField = document.querySelector(".add-task-field");
+const input = document.getElementById("newTaskInput");
+const taskList = document.querySelector(".task-list");
+
+addBtn.addEventListener("click", () => {
+  app.classList.toggle("show-input");
+  if (app.classList.contains("show-input")) {
+    input.focus();
+  }
+});
+
+input.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && input.value.trim() !== "") {
+    const newTask = document.createElement("div");
+    newTask.className = "task";
+    newTask.innerHTML = `
+      <div class="task-left">
+        <div class="task-color"></div>
+        <div class="task-title">${input.value.trim()}</div>
+      </div>
+      <div class="task-time">${new Date().getHours()}:${String(new Date().getMinutes()).padStart(2, "0")} ✔</div>
+    `;
+    taskList.appendChild(newTask);
+    input.value = "";
+    app.classList.remove("show-input");
+  }
+});
+</script>
+</body>
+</html>

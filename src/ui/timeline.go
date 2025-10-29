@@ -230,98 +230,97 @@ func (r *timelineRenderer) createDateHeader(dateKey string) fyne.CanvasObject {
 	weekdayNames := []string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}
 	weekdayName := weekdayNames[date.Weekday()]
 
-	headerText := fmt.Sprintf("%d/%02d/%02d %s   +",
+	headerText := fmt.Sprintf("%d/%02d/%02d %s",
 		date.Year(), date.Month(), date.Day(), weekdayName)
 
-	headerLabel := widget.NewLabel(headerText)
+	// Use canvas.Text to control size ~20px per mockup
+	var fg color.Color
+	if _, ok := fyne.CurrentApp().Settings().Theme().(*LightSoftTheme); ok {
+		fg = color.NRGBA{R: 0x3c, G: 0x38, B: 0x36, A: 0xFF} // #3c3836
+	} else {
+		fg = color.NRGBA{R: 0xeb, G: 0xdb, B: 0xb2, A: 0xFF} // #ebdbb2
+	}
+	headerLabel := canvas.NewText(headerText, fg)
 	headerLabel.TextStyle = fyne.TextStyle{Bold: true}
-
-	// Add separator line
-	separator := canvas.NewLine(color.RGBA{R: 200, G: 200, B: 200, A: 255})
-	separator.StrokeWidth = 1
+	headerLabel.TextSize = 20
 
 	return container.NewVBox(
-		container.NewHBox(headerLabel, widget.NewSeparator()),
-		separator,
+		headerLabel,
+		CreateSpacer(1, 10),
 	)
 }
 
 func (r *timelineRenderer) createTodoItem(todo *models.TodoItem) fyne.CanvasObject {
-	// Priority indicator using colored background rectangle
-	priorityRect := canvas.NewRectangle(todo.GetLevelColor())
-	priorityRect.SetMinSize(fyne.NewSize(20, 20))
+	// Priority indicator: colored SQUARE 32x32px from mockup
+	colorSquare := canvas.NewRectangle(todo.GetLevelColor())
+	colorSquare.CornerRadius = 6
+	colorSquare.SetMinSize(fyne.NewSize(32, 32))
+	colorSquareWrap := container.NewGridWrap(fyne.NewSize(32, 32), colorSquare)
 
-	// Todo name
-	nameLabel := widget.NewLabel(todo.Name)
-	nameLabel.Wrapping = fyne.TextWrapWord
-
-	// Time display
-	timeLabel := widget.NewLabel(fmt.Sprintf("%02d:%02d", todo.TodoTime.Hour(), todo.TodoTime.Minute()))
-	timeLabel.Alignment = fyne.TextAlignTrailing
-
-	// Real completion checkbox (avoid firing OnChanged during initial SetChecked)
-	doneCheck := widget.NewCheck("", nil)
-	doneCheck.SetChecked(todo.Done)
-	doneCheck.OnChanged = func(checked bool) {
-		// Update persistence
+	// Custom square checkbox 20x20 per mockup
+	doneCheck := newSquareCheckbox(todo.Done, func(checked bool) {
 		updated := *todo
 		updated.Done = checked
 		_ = r.timeline.dataManager.UpdateTodo(&updated, todo.TodoTime)
-		// Reload month and re-apply filter
-		if todos, err := r.timeline.dataManager.GetTodosForMonth(r.timeline.currentDate.Year, r.timeline.currentDate.Month); err == nil {
-			filtered := r.timeline.viewMode.FilterItems(todos, time.Now())
-			r.timeline.SetTodos(filtered)
-		}
-	}
-
-	// Delete button
-	delButton := widget.NewButtonWithIcon("", RedCrossIcon, func() {
-		_ = r.timeline.dataManager.RemoveTodo(todo.TodoTime)
 		if todos, err := r.timeline.dataManager.GetTodosForMonth(r.timeline.currentDate.Year, r.timeline.currentDate.Month); err == nil {
 			filtered := r.timeline.viewMode.FilterItems(todos, time.Now())
 			r.timeline.SetTodos(filtered)
 		}
 	})
-	delButton.Importance = widget.LowImportance
-	// Make delete icon smaller and vertically centered
-	delWrap := container.NewGridWrap(fyne.NewSize(16, 16), delButton)
 
-	// Star button
-	// Use built-in icons: Filled vs Confirm
-	// Choose star icon: outline when off, filled tinted primary when on
-	var starIcon fyne.Resource
-	if todo.Starred {
-		// Use blue filled star explicitly
-		starIcon = StarBlueIcon
+	// Todo name - takes the remaining space, 18px from mockup
+	nameLabel := widget.NewLabel(todo.Name)
+	nameLabel.Wrapping = fyne.TextWrapWord
+	nameLabel.TextStyle = fyne.TextStyle{}
+
+	// Time display - right-aligned, 18px from mockup
+	var timeColor color.Color
+	if _, ok := fyne.CurrentApp().Settings().Theme().(*LightSoftTheme); ok {
+		timeColor = color.NRGBA{R: 0x66, G: 0x66, B: 0x66, A: 0xFF} // #666
 	} else {
-		starIcon = StarOutlineIcon
+		timeColor = color.NRGBA{R: 0xA8, G: 0x99, B: 0x84, A: 0xFF} // #a89984
 	}
-	starButton := widget.NewButtonWithIcon("", starIcon, func() {
-		updated := *todo
-		updated.Starred = !todo.Starred
-		_ = r.timeline.dataManager.UpdateTodo(&updated, todo.TodoTime)
-		if todos, err := r.timeline.dataManager.GetTodosForMonth(r.timeline.currentDate.Year, r.timeline.currentDate.Month); err == nil {
-			filtered := r.timeline.viewMode.FilterItems(todos, time.Now())
-			r.timeline.SetTodos(filtered)
+	timeText := canvas.NewText(fmt.Sprintf("%02d:%02d", todo.TodoTime.Hour(), todo.TodoTime.Minute()), timeColor)
+	timeText.TextSize = 18
+	timeLabel := container.NewCenter(timeText)
+
+	// Status: ✓ if done, else ★ if starred; toggle star on tap when not done
+	status := newStatusIndicator(todo, func(toggleStar bool) {
+		if toggleStar {
+			updated := *todo
+			updated.Starred = !todo.Starred
+			_ = r.timeline.dataManager.UpdateTodo(&updated, todo.TodoTime)
+			if todos, err := r.timeline.dataManager.GetTodosForMonth(r.timeline.currentDate.Year, r.timeline.currentDate.Month); err == nil {
+				filtered := r.timeline.viewMode.FilterItems(todos, time.Now())
+				r.timeline.SetTodos(filtered)
+			}
 		}
 	})
-	starButton.Importance = widget.LowImportance
-	starWrap := container.NewGridWrap(fyne.NewSize(20, 20), starButton)
 
-	// Layout the todo item
-	leftSection := container.NewHBox(priorityRect, doneCheck)
-	// Use Border layout so the name takes the center and time is pinned right
-	rightSection := container.NewHBox(container.NewCenter(timeLabel), container.NewCenter(starWrap), container.NewCenter(delWrap))
+	// Layout: [ColorSquare] [Checkbox] [Name................] [Time] [Star] [Delete]
+	leftSection := container.NewHBox(colorSquareWrap, doneCheck)
+	rightSection := container.NewHBox(timeLabel, status)
 	content := container.NewBorder(nil, nil, leftSection, rightSection, nameLabel)
-	// Add soft background behind each item
-	itemBg := canvas.NewRectangle(theme.Color(theme.ColorNameInputBackground))
-	item := container.NewMax(itemBg, container.NewPadded(content))
+
+	// Row with bottom border only (no card)
+	var borderClr color.Color
+	if _, ok := fyne.CurrentApp().Settings().Theme().(*LightSoftTheme); ok {
+		borderClr = color.NRGBA{R: 0xF0, G: 0xF0, B: 0xF0, A: 0xFF}
+	} else {
+		borderClr = color.NRGBA{R: 0x3c, G: 0x38, B: 0x36, A: 0xFF}
+	}
+	bottomLine := canvas.NewRectangle(borderClr)
+	bottomLine.SetMinSize(fyne.NewSize(10, 1))
+	row := container.NewVBox(
+		container.NewPadded(content),
+		bottomLine,
+	)
 
 	// Make the entire item clickable
 	tappable := &tappableTodo{
 		todo:       todo,
 		todoTime:   todo.TodoTime,
-		container:  item,
+		container:  row,
 		onSelected: r.timeline.onTodoSelected,
 	}
 	tappable.ExtendBaseWidget(tappable)
@@ -347,6 +346,102 @@ func (tt *tappableTodo) Tapped(*fyne.PointEvent) {
 		tt.onSelected(tt.todo, tt.todoTime)
 	}
 }
+
+// Custom square checkbox per mockup
+type squareCheckbox struct {
+	widget.BaseWidget
+	checked   bool
+	onChanged func(bool)
+}
+
+func newSquareCheckbox(initial bool, onChanged func(bool)) *squareCheckbox {
+	c := &squareCheckbox{checked: initial, onChanged: onChanged}
+	c.ExtendBaseWidget(c)
+	return c
+}
+
+func (c *squareCheckbox) CreateRenderer() fyne.WidgetRenderer {
+	// colors
+	var border color.Color
+	var fillChecked color.Color
+	if _, ok := fyne.CurrentApp().Settings().Theme().(*LightSoftTheme); ok {
+		border = color.NRGBA{R: 0xD0, G: 0xD0, B: 0xD0, A: 0xFF}
+		fillChecked = color.NRGBA{R: 0x4C, G: 0xAF, B: 0x50, A: 0xFF} // #4caf50
+	} else {
+		border = color.NRGBA{R: 0x66, G: 0x5c, B: 0x54, A: 0xFF}
+		fillChecked = color.NRGBA{R: 0x98, G: 0x97, B: 0x1a, A: 0xFF} // #98971a
+	}
+	rect := canvas.NewRectangle(color.NRGBA{R: 0, G: 0, B: 0, A: 0})
+	rect.StrokeColor = border
+	rect.StrokeWidth = 2
+	rect.CornerRadius = 3
+	rect.SetMinSize(fyne.NewSize(20, 20))
+
+	tick := canvas.NewText("", color.White)
+	if c.checked {
+		rect.FillColor = fillChecked
+		tick.Text = "✓"
+	}
+	cont := container.NewMax(rect, container.NewCenter(tick))
+	return widget.NewSimpleRenderer(cont)
+}
+
+func (c *squareCheckbox) MinSize() fyne.Size { return fyne.NewSize(20, 20) }
+
+func (c *squareCheckbox) Tapped(*fyne.PointEvent) {
+	c.checked = !c.checked
+	if c.onChanged != nil {
+		c.onChanged(c.checked)
+	}
+	c.Refresh()
+}
+
+// Status indicator (✓ or ★), star toggles on tap when shown
+type statusIndicator struct {
+	widget.BaseWidget
+	todo     *models.TodoItem
+	onToggle func(toggleStar bool)
+}
+
+func newStatusIndicator(todo *models.TodoItem, onToggle func(bool)) *statusIndicator {
+	s := &statusIndicator{todo: todo, onToggle: onToggle}
+	s.ExtendBaseWidget(s)
+	return s
+}
+
+func (s *statusIndicator) CreateRenderer() fyne.WidgetRenderer {
+	var txt string
+	var col color.Color
+	if s.todo.Done {
+		txt = "✓"
+		if _, ok := fyne.CurrentApp().Settings().Theme().(*LightSoftTheme); ok {
+			col = color.NRGBA{R: 0x4C, G: 0xAF, B: 0x50, A: 0xFF}
+		} else {
+			col = color.NRGBA{R: 0x98, G: 0x97, B: 0x1a, A: 0xFF}
+		}
+	} else if s.todo.Starred {
+		txt = "★"
+		if _, ok := fyne.CurrentApp().Settings().Theme().(*LightSoftTheme); ok {
+			col = color.NRGBA{R: 0xFF, G: 0x8C, B: 0x42, A: 0xFF}
+		} else {
+			col = color.NRGBA{R: 0xFE, G: 0x80, B: 0x19, A: 0xFF}
+		}
+	} else {
+		txt = ""
+		col = theme.Color(theme.ColorNameForeground)
+	}
+	t := canvas.NewText(txt, col)
+	t.TextSize = 20
+	return widget.NewSimpleRenderer(container.NewCenter(t))
+}
+
+func (s *statusIndicator) Tapped(*fyne.PointEvent) {
+	if !s.todo.Done && s.onToggle != nil {
+		s.onToggle(true)
+	}
+}
+
+func (s *statusIndicator) MinSize() fyne.Size { return fyne.NewSize(20, 20) }
 
 // SetOnTodoSelected sets the callback for when a todo is selected
 func (t *Timeline) SetOnTodoSelected(callback func(*models.TodoItem, time.Time)) {
