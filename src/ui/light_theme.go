@@ -16,45 +16,38 @@ func NewLightSoftTheme() fyne.Theme { return &LightSoftTheme{} }
 func (t *LightSoftTheme) Color(name fyne.ThemeColorName, _ fyne.ThemeVariant) color.Color {
 	switch name {
 	case theme.ColorNameBackground:
-		// #FFF9F2 - warm background
-		return color.NRGBA{R: 0xFF, G: 0xF9, B: 0xF2, A: 0xFF}
+		// Force dark app background to avoid light bleed outside cards
+		return color.NRGBA{R: 0x28, G: 0x28, B: 0x28, A: 0xFF} // #282828
 	case theme.ColorNameForeground:
-		// #3c3836 - main text per mockup
-		return color.NRGBA{R: 0x3C, G: 0x38, B: 0x36, A: 0xFF}
+		return color.NRGBA{R: 0x3C, G: 0x38, B: 0x36, A: 0xFF} // #3c3836 main text
 	case theme.ColorNameSeparator:
-		// rgba(0,0,0,0.06) - subtle borders
-		return color.NRGBA{R: 0x00, G: 0x00, B: 0x00, A: 0x0F}
+		return color.NRGBA{R: 0xD0, G: 0xD0, B: 0xD0, A: 0xFF} // #d0d0d0 task-item border (darker for visibility)
 	case theme.ColorNameInputBackground:
-		// #fff - card background
-		return color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0xFF}
+		// Use dark panel for containers/cards to match overall dark background
+		return color.NRGBA{R: 0x3C, G: 0x38, B: 0x36, A: 0xFF} // #3c3836
 	case theme.ColorNamePrimary:
-		// #FF8C42 - accent for buttons/FAB
-		return color.NRGBA{R: 0xFF, G: 0x8C, B: 0x42, A: 0xFF}
+		return color.NRGBA{R: 0xFF, G: 0x8C, B: 0x42, A: 0xFF} // #ff8c42 accent/add-button
 	case theme.ColorNameButton:
-		// #FFD27A - button/control background
-		return color.NRGBA{R: 0xFF, G: 0xD2, B: 0x7A, A: 0xFF}
+		return color.NRGBA{R: 0xFF, G: 0x8C, B: 0x42, A: 0xFF} // #ff8c42 nav/theme bg
 	case theme.ColorNamePlaceHolder:
-		// #6b6b6b - muted text
-		return color.NRGBA{R: 0x6B, G: 0x6B, B: 0x6B, A: 0xFF}
+		return color.NRGBA{R: 0x66, G: 0x66, B: 0x66, A: 0xFF} // #666 task-time
 	case theme.ColorNameHover:
-		// rgba(255,255,255,0.9) - control hover background
-		return color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0xE6}
+		return color.NRGBA{R: 0xFF, G: 0xD2, B: 0x7A, A: 0xFF} // Approx hover
 	case theme.ColorNameFocus:
-		// #F0C23D - accent color for focus
-		return color.NRGBA{R: 0xF0, G: 0xC2, B: 0x3D, A: 0xFF}
+		return color.NRGBA{R: 0xFF, G: 0x8C, B: 0x42, A: 0xFF} // #ff8c42 focus
 	case theme.ColorNameSelection:
-		// Very subtle selection
-		return color.NRGBA{R: 0x00, G: 0x00, B: 0x00, A: 0x18}
+		return color.NRGBA{R: 0xD0, G: 0xD0, B: 0xD0, A: 0xFF} // #d0d0d0 checkbox border
 	default:
 		return theme.LightTheme().Color(name, theme.VariantLight)
 	}
 }
 
 // GetHeaderGradientColors returns the two colors for the header gradient.
-// From mockup: Start: #ff9a4d, End: #fff6e6
+// DARK background gradient for light theme (same as dark theme but slightly different shade)
+// Dark gradient from nearly black to dark gray
 func (t *LightSoftTheme) GetHeaderGradientColors() (color.Color, color.Color) {
-	start := color.NRGBA{R: 0xFF, G: 0x9A, B: 0x4D, A: 0xFF} // #ff9a4d (from mockup)
-	end := color.NRGBA{R: 0xFF, G: 0xF6, B: 0xE6, A: 0xFF}   // #fff6e6 (from mockup)
+	start := color.NRGBA{R: 0x2a, G: 0x2a, B: 0x2a, A: 0xFF} // #2a2a2a - Nearly black at top
+	end := color.NRGBA{R: 0x3c, G: 0x3c, B: 0x3c, A: 0xFF}   // #3c3c3c - Dark gray at bottom
 	return start, end
 }
 
