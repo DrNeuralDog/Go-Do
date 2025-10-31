@@ -8,12 +8,10 @@ import (
 	"todo-list-migration/src/localization"
 	"todo-list-migration/src/models"
 	"todo-list-migration/src/persistence"
-	"todo-list-migration/src/utils"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -22,7 +20,7 @@ type Timeline struct {
 	widget.BaseWidget
 
 	dataManager *persistence.MonthlyManager
-	currentDate *utils.CustomDate
+	currentDate time.Time // Changed to time.Time for daily view
 	todos       []*models.TodoItem
 	viewMode    models.ViewMode
 
@@ -40,7 +38,7 @@ type Timeline struct {
 func NewTimeline(dataManager *persistence.MonthlyManager) *Timeline {
 	t := &Timeline{
 		dataManager:    dataManager,
-		currentDate:    utils.GetCurrentDate(),
+		currentDate:    time.Now(), // Default to now
 		viewMode:       models.ViewAll,
 		scrollPosition: 0,
 		itemHeight:     80,
@@ -53,7 +51,7 @@ func NewTimeline(dataManager *persistence.MonthlyManager) *Timeline {
 }
 
 // SetDate sets the current viewing date
-func (t *Timeline) SetDate(date *utils.CustomDate) {
+func (t *Timeline) SetDate(date time.Time) {
 	t.currentDate = date
 	// Don't auto-refresh - let caller control when to refresh
 }
@@ -76,32 +74,9 @@ func (t *Timeline) organizeByDate() {
 	t.dateGroups = make(map[string][]*models.TodoItem)
 	t.visibleItems = make([]*models.TodoItem, 0)
 
-	// currentTime no longer needed here; filtering handled in SetTodos/FilterItems
-
-	for _, todo := range t.todos {
-		// Apply view mode filtering
-		if t.viewMode == models.ViewIncomplete && todo.Done {
-			continue
-		}
-		// Other modes are handled in mw.loadTodos() via FilterItems.
-
-		dateKey := todo.TodoTime.Format("2006-01-02")
-		t.dateGroups[dateKey] = append(t.dateGroups[dateKey], todo)
-		t.visibleItems = append(t.visibleItems, todo)
-	}
-
-	// Sort todos within each date group by time (reverse chronological)
-	for dateKey := range t.dateGroups {
-		todos := t.dateGroups[dateKey]
-		// Sort by time descending (most recent first)
-		for i := 0; i < len(todos)-1; i++ {
-			for j := i + 1; j < len(todos); j++ {
-				if todos[i].TodoTime.Before(todos[j].TodoTime) {
-					todos[i], todos[j] = todos[j], todos[i]
-				}
-			}
-		}
-	}
+	dateKey := t.currentDate.Format("2006-01-02")
+	t.dateGroups[dateKey] = t.todos // Todos are already filtered by day
+	t.visibleItems = t.todos
 }
 
 // CreateRenderer creates the widget renderer
@@ -153,7 +128,8 @@ func (r *timelineRenderer) Refresh() {
 }
 
 func (r *timelineRenderer) BackgroundColor() fyne.ThemeColorName {
-	return theme.ColorNameBackground
+	// Transparent so the full-window background (gradient) is visible outside the card
+	return ""
 }
 
 func (r *timelineRenderer) Objects() []fyne.CanvasObject {
@@ -172,7 +148,6 @@ func (r *timelineRenderer) Destroy() {
 func (r *timelineRenderer) createTimelineContent() *fyne.Container {
 	var objects []fyne.CanvasObject
 
-	// Add empty state if no todos
 	if len(r.timeline.visibleItems) == 0 {
 		emptyLabel := widget.NewLabel(localization.GetString("status_empty_list"))
 		emptyLabel.Alignment = fyne.TextAlignCenter
@@ -180,44 +155,22 @@ func (r *timelineRenderer) createTimelineContent() *fyne.Container {
 		return container.NewVBox(objects...)
 	}
 
-	// Group todos by date and create visual groups
-	dateKeys := r.getSortedDateKeys()
+	// Single date header for current day
+	dateKey := r.timeline.currentDate.Format("2006-01-02")
+	dateHeader := r.createDateHeader(dateKey)
+	objects = append(objects, dateHeader)
 
-	for _, dateKey := range dateKeys {
-		todos := r.timeline.dateGroups[dateKey]
-
-		// Add date header
-		dateHeader := r.createDateHeader(dateKey)
-		objects = append(objects, dateHeader)
-
-		// Add todo items for this date
-		for _, todo := range todos {
-			todoItem := r.createTodoItem(todo)
-			objects = append(objects, todoItem)
-		}
+	// Add todo items
+	for _, todo := range r.timeline.todos {
+		todoItem := r.createTodoItem(todo)
+		objects = append(objects, todoItem)
 	}
 
 	return container.NewVBox(objects...)
 }
 
 func (r *timelineRenderer) getSortedDateKeys() []string {
-	var keys []string
-	for key := range r.timeline.dateGroups {
-		keys = append(keys, key)
-	}
-
-	// Sort dates in descending order (most recent first)
-	for i := 0; i < len(keys)-1; i++ {
-		for j := i + 1; j < len(keys); j++ {
-			date1, _ := time.Parse("2006-01-02", keys[i])
-			date2, _ := time.Parse("2006-01-02", keys[j])
-			if date1.Before(date2) {
-				keys[i], keys[j] = keys[j], keys[i]
-			}
-		}
-	}
-
-	return keys
+	return []string{r.timeline.currentDate.Format("2006-01-02")}
 }
 
 func (r *timelineRenderer) createDateHeader(dateKey string) fyne.CanvasObject {
@@ -244,8 +197,12 @@ func (r *timelineRenderer) createDateHeader(dateKey string) fyne.CanvasObject {
 	headerLabel.TextStyle = fyne.TextStyle{Bold: true}
 	headerLabel.TextSize = 20
 
+	// Add left padding to match task items alignment (padding is handled by container.NewPadded)
+	// But we need minimal left offset - tasks have ColorSquare(32) + Checkbox(20) + gaps ~12px = ~64px total left
+	// Per mockup the date is NOT that far left, just slightly inset from container edge
+	// Let's use a simple left spacer matching typical padding
 	return container.NewVBox(
-		headerLabel,
+		container.NewHBox(CreateSpacer(8, 1), headerLabel), // 8px left offset
 		CreateSpacer(1, 10),
 	)
 }
@@ -262,7 +219,7 @@ func (r *timelineRenderer) createTodoItem(todo *models.TodoItem) fyne.CanvasObje
 		updated := *todo
 		updated.Done = checked
 		_ = r.timeline.dataManager.UpdateTodo(&updated, todo.TodoTime)
-		if todos, err := r.timeline.dataManager.GetTodosForMonth(r.timeline.currentDate.Year, r.timeline.currentDate.Month); err == nil {
+		if todos, err := r.timeline.dataManager.GetTodosForMonth(r.timeline.currentDate.Year(), int(r.timeline.currentDate.Month())); err == nil {
 			filtered := r.timeline.viewMode.FilterItems(todos, time.Now())
 			r.timeline.SetTodos(filtered)
 		}
@@ -290,7 +247,7 @@ func (r *timelineRenderer) createTodoItem(todo *models.TodoItem) fyne.CanvasObje
 			updated := *todo
 			updated.Starred = !todo.Starred
 			_ = r.timeline.dataManager.UpdateTodo(&updated, todo.TodoTime)
-			if todos, err := r.timeline.dataManager.GetTodosForMonth(r.timeline.currentDate.Year, r.timeline.currentDate.Month); err == nil {
+			if todos, err := r.timeline.dataManager.GetTodosForMonth(r.timeline.currentDate.Year(), int(r.timeline.currentDate.Month())); err == nil {
 				filtered := r.timeline.viewMode.FilterItems(todos, time.Now())
 				r.timeline.SetTodos(filtered)
 			}
@@ -305,7 +262,7 @@ func (r *timelineRenderer) createTodoItem(todo *models.TodoItem) fyne.CanvasObje
 	// Row with bottom border only (no card)
 	var borderClr color.Color
 	if _, ok := fyne.CurrentApp().Settings().Theme().(*LightSoftTheme); ok {
-		borderClr = color.NRGBA{R: 0xF0, G: 0xF0, B: 0xF0, A: 0xFF}
+		borderClr = color.NRGBA{R: 0xD0, G: 0xD0, B: 0xD0, A: 0xFF} // #d0d0d0 - darker gray for visibility
 	} else {
 		borderClr = color.NRGBA{R: 0x3c, G: 0x38, B: 0x36, A: 0xFF}
 	}
@@ -413,22 +370,29 @@ func (s *statusIndicator) CreateRenderer() fyne.WidgetRenderer {
 	var txt string
 	var col color.Color
 	if s.todo.Done {
+		// Completed: show check mark
 		txt = "✓"
 		if _, ok := fyne.CurrentApp().Settings().Theme().(*LightSoftTheme); ok {
 			col = color.NRGBA{R: 0x4C, G: 0xAF, B: 0x50, A: 0xFF}
 		} else {
 			col = color.NRGBA{R: 0x98, G: 0x97, B: 0x1a, A: 0xFF}
 		}
-	} else if s.todo.Starred {
-		txt = "★"
-		if _, ok := fyne.CurrentApp().Settings().Theme().(*LightSoftTheme); ok {
-			col = color.NRGBA{R: 0xFF, G: 0x8C, B: 0x42, A: 0xFF}
-		} else {
-			col = color.NRGBA{R: 0xFE, G: 0x80, B: 0x19, A: 0xFF}
-		}
 	} else {
-		txt = ""
-		col = theme.Color(theme.ColorNameForeground)
+		// Not done: always show a star
+		txt = "★"
+		if s.todo.Starred {
+			// Starred color per theme
+			if _, ok := fyne.CurrentApp().Settings().Theme().(*LightSoftTheme); ok {
+				// Light theme: blue star
+				col = color.NRGBA{R: 0x3C, G: 0x82, B: 0xFF, A: 0xFF} // #3c82ff
+			} else {
+				// Dark theme: orange star
+				col = color.NRGBA{R: 0xFE, G: 0x80, B: 0x19, A: 0xFF} // #fe8019
+			}
+		} else {
+			// Default grey star
+			col = color.NRGBA{R: 0x9E, G: 0x9E, B: 0x9E, A: 0xFF} // #9e9e9e
+		}
 	}
 	t := canvas.NewText(txt, col)
 	t.TextSize = 20

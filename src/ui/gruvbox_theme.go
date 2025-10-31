@@ -18,20 +18,20 @@ func NewGruvboxBlackTheme() fyne.Theme {
 }
 
 func (t *GruvboxBlackTheme) Color(name fyne.ThemeColorName, _ fyne.ThemeVariant) color.Color {
-	// Gruvbox palette matching the mockup
+	// Updated Gruvbox palette strictly matching the mockup CSS
 	// Backgrounds
-	bg := hex("#2a2723")    // main background --bg
-	panel := hex("#3c3836") // panel/card background --panel-bg / --card-bg / input background
+	bg := hex("#282828")    // tasks-container bg
+	panel := hex("#3c3836") // dropdown bg
 	// Foregrounds
-	fg := hex("#ebdbb2")    // primary text --text
-	muted := hex("#bdae93") // secondary text / placeholders --muted
+	fg := hex("#ebdbb2")    //#ebdbb2 main text
+	muted := hex("#a89984") // task-time
 	// Accents
-	primary := hex("#fabd2f")   // yellow accent per mockup
-	focus := hex("#fabd2f")     // focus ring equals accent
-	hover := hex("#504945")     // hover overlay
-	selection := hex("#665c54") // selection background
-	disabled := hex("#504945")  // disabled elements
-	border := hex("#3c3836")    // subtle border rgba(255,255,255,0.06)
+	primary := hex("#fabd2f")   // logo, add-button bg, theme-selector text
+	focus := hex("#fabd2f")     // focus same as primary
+	hover := hex("#504945")     // nav-btn bg, theme-selector bg
+	selection := hex("#665c54") // checkbox border
+	disabled := hex("#504945")  // disabled
+	border := hex("#3c3836")    // task-item border
 
 	switch name {
 	case theme.ColorNameBackground:
@@ -64,10 +64,10 @@ func (t *GruvboxBlackTheme) Color(name fyne.ThemeColorName, _ fyne.ThemeVariant)
 }
 
 // GetHeaderGradientColors returns the two colors for the header gradient in Gruvbox theme.
-// From mockup: Start: #3c2414, End: #6e4a30
+// DARK background gradient - nearly black to dark gray
 func (t *GruvboxBlackTheme) GetHeaderGradientColors() (color.Color, color.Color) {
-	start := hex("#3c2414") // --header-grad-a (from mockup)
-	end := hex("#6e4a30")   // --header-grad-b (from mockup)
+	start := hex("#282828") // Nearly black at top
+	end := hex("#3c3836")   // Dark gray at bottom
 	return start, end
 }
 
