@@ -31,7 +31,7 @@ func NewDefaultPomodoroConfig() *PomodoroConfig {
 	}
 }
 
-// PomodoroTimer manages the pomodoro timer state
+// PomodoroTimer manages the pomodoro timer state 
 type PomodoroTimer struct {
 	Config           *PomodoroConfig
 	State            PomodoroState

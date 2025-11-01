@@ -36,7 +36,7 @@ type MainWindow struct {
 	viewModeBtn *widget.Button // legacy hidden
 	themeBtn    *widget.Button // legacy hidden
 	// Styled controls
-	dropdownBtn     *SimpleRectButton
+	viewSelect      *widget.Select
 	prevRectBtn     *SimpleRectButton
 	nextRectBtn     *SimpleRectButton
 	pomodoroRectBtn *SimpleRectButton
@@ -176,50 +176,71 @@ func (mw *MainWindow) setupUI() {
 		titleColor = hex("#fabd2f")
 		logoRes = assets.HeaderIconDark
 	}
-    logoImg := canvas.NewImageFromResource(logoRes)
-    logoImg.FillMode = canvas.ImageFillContain
-    // Make icon ~3x larger than before (54 -> 162) and hard-anchor to bottom
-    logoSize := float32(162)
-    // inner grid ensures non-zero MinSize for the bottom area
-    inner := container.NewGridWrap(fyne.NewSize(logoSize, logoSize), container.NewMax(logoImg))
-    logo := container.NewGridWrap(fyne.NewSize(logoSize, logoSize), container.NewBorder(nil, inner, nil, nil, nil))
+	logoImg := canvas.NewImageFromResource(logoRes)
+	logoImg.FillMode = canvas.ImageFillContain
+	// Icon size reduced to 54px (was 162px - 3x smaller)
+	logoSize := float32(80)
+	logoImg.SetMinSize(fyne.NewSize(logoSize, logoSize))
 
 	// Title text - 56px from mockup
 	titleTxt := canvas.NewText("GO DO", titleColor)
-	titleTxt.TextSize = 56                           // From mockup
+	titleTxt.TextSize = 64                           // From mockup
 	titleTxt.TextStyle = fyne.TextStyle{Bold: false} // Weight 300 in mockup = light, use normal
-	// Bottom-align title inside a row of height logoSize by adding top padding
-	titlePad := logoSize - titleTxt.TextSize
-	if titlePad < 0 {
-		titlePad = 0
+
+	// Bottom-align both icon and title using VBox with spacers
+	// Calculate how much padding needed to push icon to bottom
+	iconPad := titleTxt.TextSize - logoSize
+	if iconPad < 0 {
+		iconPad = 0
 	}
-	titleAligned := container.NewBorder(CreateSpacer(1, titlePad), nil, nil, nil, titleTxt)
+	logoAligned := container.NewVBox(
+		CreateSpacer(1, iconPad),
+		container.NewMax(logoImg),
+	)
 
-	header := container.NewHBox(logo, CreateSpacer(20, 1), titleAligned)
+	header := container.NewHBox(logoAligned, CreateSpacer(5, 1), titleTxt)
 
-	// --- Controls row: [Dropdown (cycle)] [←] [→] [Pomodoro] ---
-	var dropdownBg, dropdownFg, navBg, navFg, pomodoroBg, pomodoroFg color.Color
+	// --- Controls row: [Select] [←] [→] [Pomodoro] ---
+	var navBg, navFg, pomodoroBg, pomodoroFg color.Color
 	if _, ok := currentTheme.(*LightSoftTheme); ok {
-		dropdownBg = hex("#ffffff")
-		dropdownFg = hex("#3c3836")
 		navBg = hex("#ff8c42")
 		navFg = color.White
 		pomodoroBg = hex("#ff8c42")
 		pomodoroFg = color.White
 	} else {
-		dropdownBg = hex("#3c3836")
-		dropdownFg = hex("#ebdbb2")
 		navBg = hex("#504945")
 		navFg = hex("#fabd2f")
 		pomodoroBg = hex("#504945")
 		pomodoroFg = hex("#fabd2f")
 	}
 
-	// Dropdown cycles through modes on tap
-	mw.dropdownBtn = NewSimpleRectButton(mw.viewMode.GetLabel()+" ▼", dropdownBg, dropdownFg, fyne.NewSize(180, 44), 8, func() {
-		mw.onViewModeClicked()
-		mw.dropdownBtn.SetText(mw.viewMode.GetLabel() + " ▼")
+	// Create Select widget with all view modes
+	viewOptions := []string{"All", "Incomplete", "Complete", "Important"}
+	mw.viewSelect = widget.NewSelect(viewOptions, func(selected string) {
+		// Map selected string to ViewMode
+		switch selected {
+		case "All":
+			mw.viewMode = models.ViewAll
+		case "Incomplete":
+			mw.viewMode = models.ViewIncomplete
+		case "Complete":
+			mw.viewMode = models.ViewComplete
+		case "Important":
+			mw.viewMode = models.ViewStarred
+		}
+		mw.loadTodos()
+		mw.refreshView()
 	})
+	mw.viewSelect.SetSelected(mw.viewMode.GetLabel())
+
+	// Wrap Select in styled container with white background for light theme
+	var selectBg color.Color
+	if _, ok := currentTheme.(*LightSoftTheme); ok {
+		selectBg = color.White
+	} else {
+		selectBg = hex("#3c3836")
+	}
+	selectWrapper := CreateStyledSelect(mw.viewSelect, selectBg, fyne.NewSize(180, 44), 8)
 
 	mw.prevRectBtn = NewSimpleRectButton("←", navBg, navFg, fyne.NewSize(44, 44), 8, mw.onPrevDayClicked)
 	mw.nextRectBtn = NewSimpleRectButton("→", navBg, navFg, fyne.NewSize(44, 44), 8, mw.onNextDayClicked)
@@ -228,7 +249,7 @@ func (mw *MainWindow) setupUI() {
 	mw.pomodoroRectBtn = NewSimpleRectButton("Pomodoro", pomodoroBg, pomodoroFg, fyne.NewSize(100, 44), 8, mw.onPomodoroTopClicked)
 
 	controls := container.NewHBox(
-		mw.dropdownBtn,
+		selectWrapper,
 		CreateSpacer(10, 1),
 		mw.prevRectBtn,
 		CreateSpacer(10, 1),
@@ -250,11 +271,11 @@ func (mw *MainWindow) setupUI() {
 
 	// Build header section (fixed at top)
 	headerArea := container.NewVBox(
-		CreateSpacer(1, 30),
+		CreateSpacer(1, 15), // Reduced from 30px to 15px (2x smaller)
 		headerPadded,
-		CreateSpacer(1, 25),
+		CreateSpacer(1, 30),
 		controlsPadded,
-		CreateSpacer(1, 20),
+		CreateSpacer(1, 30),
 	)
 	topSection := headerArea
 
@@ -355,7 +376,12 @@ func (mw *MainWindow) onNextDayClicked() {
 }
 
 func (mw *MainWindow) onViewModeClicked() {
+	// This method is now handled by the Select widget callback
+	// Kept for backward compatibility with legacy viewModeBtn
 	mw.viewMode = mw.viewMode.GetNextMode()
+	if mw.viewSelect != nil {
+		mw.viewSelect.SetSelected(mw.viewMode.GetLabel())
+	}
 	mw.loadTodos()
 	mw.refreshView()
 }
