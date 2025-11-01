@@ -3,7 +3,9 @@
     "allow": [
       "Bash(go build:*)",
       "Bash(go test:*)",
-      "Bash(./bin/todo-list.exe:*)"
+      "Bash(./bin/todo-list.exe:*)",
+      "Bash(taskkill:*)",
+      "Bash(nul)"
     ],
     "deny": [],
     "ask": []
