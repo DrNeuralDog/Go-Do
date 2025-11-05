@@ -391,7 +391,7 @@ func (mw *MainWindow) refreshView() {
 // Event handlers
 
 func (mw *MainWindow) onAddButtonClicked() {
-	mw.todoForm.ShowCreateDialog(func() {
+	mw.todoForm.ShowCreateWindow(func() {
 		// Refresh the todo list after saving
 		mw.loadTodos()
 		mw.refreshView()
@@ -425,7 +425,7 @@ func (mw *MainWindow) onTodoSelected(todo *models.TodoItem, todoTime time.Time) 
 	fmt.Printf("Selected todo: %s\n", todo.Name)
 
 	// Open edit dialog
-	mw.todoForm.ShowEditDialog(todo, todoTime, func() {
+	mw.todoForm.ShowEditWindow(todo, todoTime, func() {
 		// Refresh the todo list after saving
 		mw.loadTodos()
 		mw.refreshView()
