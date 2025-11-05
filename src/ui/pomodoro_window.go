@@ -3,6 +3,7 @@ package ui
 import (
     "fmt"
     "image/color"
+    "math"
     "time"
 
     "todo-list-migration/src/models"
@@ -27,6 +28,7 @@ type PomodoroWindow struct {
     pauseBtn       *SimpleRectButton
     resetBtn       *SimpleRectButton
     sessionsCanvas *canvas.Text
+    progressRing   *ProgressRing
 
 	// Configuration inputs
     workSpinner       *NumberSpinner
@@ -157,10 +159,23 @@ func (pw *PomodoroWindow) setupUI() {
         ),
     )
 
-	// Layout
+    // Progress ring colors
+    var tickBg color.Color
+    if _, ok := currentTheme.(*LightSoftTheme); ok {
+        tickBg = hex("#e0e0e0")
+    } else {
+        tickBg = hex("#504945")
+    }
+    pw.progressRing = NewProgressRing(hex("#fb4934"), tickBg)
+
+    // Layout
+    ringWithDigits := container.NewMax(
+        container.NewCenter(pw.progressRing),
+        container.NewCenter(pw.timerCanvas),
+    )
     timerDisplay := container.NewVBox(
         CreateSpacer(1, 40),
-        container.NewCenter(pw.timerCanvas),
+        container.NewCenter(container.NewGridWrap(fyne.NewSize(240, 240), ringWithDigits)),
         CreateSpacer(1, 10),
         container.NewCenter(pw.stateCanvas),
         CreateSpacer(1, 20),
@@ -237,6 +252,40 @@ func (pw *PomodoroWindow) tick() {
     pw.sessionsCanvas.Text = sessionsText
     pw.sessionsCanvas.Refresh()
 
+    // Update progress ring (remaining fraction, clockwise from left)
+    var prog float32 = 1
+    total := pw.timer.GetCurrentDuration()
+    // Handle paused/unknown state by estimating total from config
+    if (pw.timer.State == models.PomodoroPaused || total == 0) && pw.timer.TimeRemaining > 0 {
+        wrk := time.Duration(pw.config.WorkDuration) * time.Minute
+        sbr := time.Duration(pw.config.ShortBreakDuration) * time.Minute
+        lbr := time.Duration(pw.config.LongBreakDuration) * time.Minute
+        // choose the smallest duration that is >= remaining as a plausible total
+        candidates := []time.Duration{wrk, sbr, lbr}
+        var best time.Duration
+        for _, d := range candidates {
+            if d >= pw.timer.TimeRemaining && (best == 0 || d < best) {
+                best = d
+            }
+        }
+        if best == 0 {
+            best = wrk
+        }
+        total = best
+    }
+    if pw.timer.State != models.PomodoroIdle && total > 0 {
+        prog = float32(pw.timer.TimeRemaining.Seconds() / total.Seconds())
+        if prog < 0 {
+            prog = 0
+        }
+        if prog > 1 {
+            prog = 1
+        }
+    }
+    if pw.progressRing != nil {
+        pw.progressRing.SetProgress(prog)
+    }
+
 	// Update button states
     switch pw.timer.State {
 	case models.PomodoroIdle:
@@ -257,6 +306,125 @@ func (pw *PomodoroWindow) tick() {
         pw.pauseBtn.SetText("Resume")
 	}
 }
+
+// ProgressRing renders a circular segmented progress indicator.
+type ProgressRing struct {
+    widget.BaseWidget
+    Progress    float32      // 0..1 of remaining progress
+    Segments    int          // number of segments around the circle
+    StartAngle  float64      // radians; 0 is right, pi is left
+    FillColor   color.Color  // color for filled segments
+    BgColor     color.Color  // color for background segments
+    InnerRatio  float32      // inner radius ratio relative to half of min(size)
+    SegLength   float32      // length of each radial segment in px
+    StrokeWidth float32      // thickness of each segment
+}
+
+func NewProgressRing(fill, bg color.Color) *ProgressRing {
+    pr := &ProgressRing{
+        Progress:    1,
+        Segments:    90,
+        StartAngle:  math.Pi, // start from left side
+        FillColor:   fill,
+        BgColor:     bg,
+        InnerRatio:  0.68,
+        SegLength:   14,
+        StrokeWidth: 4,
+    }
+    pr.ExtendBaseWidget(pr)
+    return pr
+}
+
+func (pr *ProgressRing) SetProgress(p float32) {
+    if p < 0 {
+        p = 0
+    }
+    if p > 1 {
+        p = 1
+    }
+    if pr.Progress == p {
+        return
+    }
+    pr.Progress = p
+    pr.Refresh()
+}
+
+func (pr *ProgressRing) MinSize() fyne.Size {
+    return fyne.NewSize(200, 200)
+}
+
+func (pr *ProgressRing) CreateRenderer() fyne.WidgetRenderer {
+    lines := make([]*canvas.Line, pr.Segments)
+    objs := make([]fyne.CanvasObject, pr.Segments)
+    for i := 0; i < pr.Segments; i++ {
+        ln := canvas.NewLine(pr.BgColor)
+        ln.StrokeWidth = pr.StrokeWidth
+        lines[i] = ln
+        objs[i] = ln
+    }
+    return &progressRingRenderer{
+        ring:  pr,
+        lines: lines,
+        objs:  objs,
+    }
+}
+
+type progressRingRenderer struct {
+    ring  *ProgressRing
+    lines []*canvas.Line
+    objs  []fyne.CanvasObject
+}
+
+func (r *progressRingRenderer) Layout(size fyne.Size) {
+    cx := size.Width / 2
+    cy := size.Height / 2
+    halfMin := float32(math.Min(float64(size.Width), float64(size.Height)) / 2)
+    inner := halfMin * r.ring.InnerRatio
+    outer := inner + r.ring.SegLength
+
+    for i := 0; i < r.ring.Segments; i++ {
+        // clockwise angle from start
+        ang := r.ring.StartAngle + 2*math.Pi*float64(i)/float64(r.ring.Segments)
+        cos := float32(math.Cos(ang))
+        sin := float32(math.Sin(ang))
+        x1 := cx + inner*cos
+        y1 := cy + inner*sin
+        x2 := cx + outer*cos
+        y2 := cy + outer*sin
+        ln := r.lines[i]
+        ln.Position1 = fyne.NewPos(x1, y1)
+        ln.Position2 = fyne.NewPos(x2, y2)
+    }
+}
+
+func (r *progressRingRenderer) MinSize() fyne.Size {
+    return r.ring.MinSize()
+}
+
+func (r *progressRingRenderer) Refresh() {
+    // recolor based on current progress
+    filled := int(float64(r.ring.Segments) * float64(r.ring.Progress) + 0.5)
+    if filled < 0 {
+        filled = 0
+    }
+    if filled > r.ring.Segments {
+        filled = r.ring.Segments
+    }
+    for i := 0; i < r.ring.Segments; i++ {
+        if i < filled {
+            r.lines[i].StrokeColor = r.ring.FillColor
+        } else {
+            r.lines[i].StrokeColor = r.ring.BgColor
+        }
+        r.lines[i].Refresh()
+    }
+    // ensure geometry is correct if resized
+    r.Layout(r.ring.Size())
+}
+
+func (r *progressRingRenderer) BackgroundColor() fyne.ThemeColorName { return "" }
+func (r *progressRingRenderer) Objects() []fyne.CanvasObject         { return r.objs }
+func (r *progressRingRenderer) Destroy()                             {}
 
 // Event handlers
 func (pw *PomodoroWindow) onStartClicked() {
