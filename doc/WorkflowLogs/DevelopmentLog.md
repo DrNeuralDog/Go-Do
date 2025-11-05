@@ -1,3 +1,4 @@
+[2025-11-05] Обновлён спинбокс Pomodoro: увеличены кнопки стрелок, добавлена рамка поля, исправлен лейаут NumberSpinner; сборка успешна
 [2025-10-02 11:20] Active star icon set to blue (custom SVG), delete cross colored red; alignment fixes - Success
 [2025-10-02 11:06] Fixed checkbox infinite update loop by binding OnChanged after SetChecked; updates persist without repeated saves - Success
 [2025-10-02 10:58] Made + button square (40x40); added subtle panel background and thin border around timeline; works for Light and Gruvbox - Success
@@ -61,3 +62,18 @@ This log tracks development progress, completed tasks, and key decisions made du
 2025-10-30 07:10:00 UTC] Pomodoro окно: увеличен размер таймера (96px), все надписи окрашены в цвет заголовка (белый/жёлтый по теме), фон приведён к тем же градиентам, поля настроек заменены на спиннеры со стрелками и белым фоном; сборка успешна - Успех
 [
 2025-10-30 07:35:00 UTC] Pomodoro окно: уменьшил размер цифр таймера на 20% (с 96 до 77), добавил ручной ввод значений через диалог при клике по спиннеру, сохранив стрелки ▲▼; сборка успешна - Успех
+[2025-11-05 00:00:00 UTC] Центрировал текст заголовка даты в окне задач (таймлайн): заменён HBox+спейсер на Center, добавлено TextAlignCenter у canvas.Text в src/ui/timeline.go - Успех
+[2025-11-05 00:00:00 UTC] Установлена иконка приложения/окна из doc/Icons/Icon_Work_Version.png: добавлен assets.AppIcon (doc/assets_header.go), применён через myApp.SetIcon и myWindow.SetIcon в src/main.go - Успех
+[2025-11-05 00:10:00 UTC] Добавлена упаковка Windows EXE с иконкой: цель Makefile `package-windows` (fyne package -os windows -icon doc/Icons/Icon_Work_Version.png -name GoDo -release), перенос GoDo.exe в bin/ - Успех
+[2025-11-05 00:25:00 UTC] Увеличен размер логотипа в шапке приложения до 128px (src/ui/mainwindow.go) - Успех
+[2025-11-05 00:40:00 UTC] Добавлен альтернативный сборочный путь для EXE-иконки: Makefile цели `generate-ico`, `embed-ico`, `build-windows-ico` (PowerShell PNG->ICO + rsrc resource.syso + go build) - Успех
+[2025-11-05 00:00:00 UTC] Добавлена анимация нажатия: flash-эффект в SimpleRectButton и RoundIconButton (src/ui/style_helpers.go), визуальный отклик для строк таймлайна, чекбокса и индикатора статуса (src/ui/timeline.go) - Успех
+[2025-11-05 00:00:00 UTC] Pomodoro: заменены кнопки Start/Pause/Reset на SimpleRectButton с поддержкой Enable/Disable и анимацией (src/ui/pomodoro_window.go), стили под тему - Сборка успешна
+[2025-11-05 00:00:00 UTC] Добавлен hover-эффект для кастомных кнопок: RoundIconButton и SimpleRectButton (осветление фона при наведении, обе темы) - Сборка успешна
+[2025-11-05 00:00:00 UTC] Восстановлена анимация комбобокса: hover (светлый оверлей) и press flash (тёмный оверлей) для CustomSelect; совместимо с обёрткой CreateStyledSelect - Сборка успешна
+[2025-11-05 00:30:00 UTC] Поправлена ширина выпадающего списка CustomSelect: PopUpMenu создаётся через NewPopUpMenu и ресайзится до ширины контрола; сборка успешна
+[2025-11-05 00:40:00 UTC] Уменьшен размер логотипа в хедере на ~30% (128→90px), перерасчёт отступа для выравнивания по низу заголовка сохранён; сборка успешна
+[2025-11-05 12:00:00 UTC] Light тема: фон диалога Add Todo приведён к #3c3836, фон полей ввода — #ffffff, цвет текста не менялся; изменения в src/ui/light_theme.go; сборка успешна - Успех
+[2025-11-05 13:10:00 UTC] Добавлено поле Order в TodoItem (скрытый порядок), сортировка дня по Order→time, кнопки ↑/↓ для перестановки с сохранением — Правки в src/models/todo.go, src/ui/mainwindow.go, src/ui/timeline.go; данные совместимы, сборка ожидается - Принято
+[2025-11-05 13:40:00 UTC] Реализован DnD reorder задач: перетаскивание строки вверх/вниз с порогом ~60px, авто-сохранение Order; стрелки удалены — Правки в src/ui/timeline.go, src/ui/mainwindow.go - Успех
+[2025-11-05 14:20:00 UTC] Улучшен UX DnD: мгновенная перестановка без диска, курсор-рука при перетаскивании, стабильная синяя подсветка в процессе, снятие на MouseUp — Правки в src/ui/timeline.go, src/ui/mainwindow.go - Успех

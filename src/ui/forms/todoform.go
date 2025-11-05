@@ -60,6 +60,11 @@ func NewTodoForm(window fyne.Window, dataManager *persistence.MonthlyManager) *T
 	return tf
 }
 
+// createFormItemWithWhiteLabel creates FormItem for dialog.NewForm
+func createFormItemWithWhiteLabel(labelText string, w fyne.CanvasObject) *widget.FormItem {
+	return &widget.FormItem{Text: labelText, Widget: w}
+}
+
 // ShowCreateDialog shows the form for creating a new todo
 func (tf *TodoForm) ShowCreateDialog(onSave func()) {
 	tf.isEditMode = false
@@ -134,6 +139,100 @@ func (tf *TodoForm) ShowEditDialog(todo *models.TodoItem, originalTime time.Time
 	dialog.Resize(fyne.NewSize(700, 600))
 	tf.currentDialog = dialog
 	dialog.Show()
+}
+
+// ShowCreateWindow opens the form in a standalone window for creating a new todo
+func (tf *TodoForm) ShowCreateWindow(onSave func()) {
+    tf.isEditMode = false
+    tf.onSaveCallback = onSave
+    tf.resetForm()
+
+    title := localization.GetString("form_title_add")
+    win := fyne.CurrentApp().NewWindow(title)
+    tf.window = win
+
+    // Build form content
+    form := &widget.Form{
+        Items: []*widget.FormItem{
+            {Text: "Name:", Widget: tf.nameEntry},
+            {Text: "Date/Time:", Widget: container.NewBorder(nil, nil, nil, tf.dateTimeButton, tf.dateTimeEntry)},
+            {Text: "Location:", Widget: tf.placeEntry},
+            {Text: "Label:", Widget: tf.labelEntry},
+            {Text: "Type:", Widget: tf.kindSelect},
+            {Text: "Priority:", Widget: tf.prioritySelect},
+            {Text: "Content:", Widget: container.NewScroll(tf.contentEntry)},
+            {Text: "Reminder:", Widget: container.NewVBox(tf.warnTimeSlider, tf.warnTimeLabel)},
+        },
+    }
+
+    // Buttons
+    addBtn := widget.NewButton(localization.GetString("form_button_add"), func() {
+        if err := tf.trySubmit(); err != nil {
+            dialog.ShowError(err, tf.window)
+            return
+        }
+        if tf.onSaveCallback != nil {
+            tf.onSaveCallback()
+        }
+        win.Close()
+    })
+    cancelBtn := widget.NewButton(localization.GetString("form_button_cancel"), func() {
+        win.Close()
+    })
+
+    buttons := container.NewHBox(addBtn, cancelBtn)
+    content := container.NewBorder(nil, buttons, nil, nil, form)
+    win.SetContent(content)
+    win.Resize(fyne.NewSize(700, 600))
+    win.Show()
+}
+
+// ShowEditWindow opens the form in a standalone window for editing an existing todo
+func (tf *TodoForm) ShowEditWindow(todo *models.TodoItem, originalTime time.Time, onSave func()) {
+    tf.isEditMode = true
+    tf.originalTodo = todo
+    tf.originalTime = originalTime
+    tf.onSaveCallback = onSave
+    tf.populateForm(todo)
+
+    title := localization.GetString("form_title_edit")
+    win := fyne.CurrentApp().NewWindow(title)
+    tf.window = win
+
+    // Build form content
+    form := &widget.Form{
+        Items: []*widget.FormItem{
+            {Text: "Name:", Widget: tf.nameEntry},
+            {Text: "Date/Time:", Widget: container.NewBorder(nil, nil, nil, tf.dateTimeButton, tf.dateTimeEntry)},
+            {Text: "Location:", Widget: tf.placeEntry},
+            {Text: "Label:", Widget: tf.labelEntry},
+            {Text: "Type:", Widget: tf.kindSelect},
+            {Text: "Priority:", Widget: tf.prioritySelect},
+            {Text: "Content:", Widget: container.NewScroll(tf.contentEntry)},
+            {Text: "Reminder:", Widget: container.NewVBox(tf.warnTimeSlider, tf.warnTimeLabel)},
+        },
+    }
+
+    // Buttons
+    saveBtn := widget.NewButton(localization.GetString("form_button_save"), func() {
+        if err := tf.trySubmit(); err != nil {
+            dialog.ShowError(err, tf.window)
+            return
+        }
+        if tf.onSaveCallback != nil {
+            tf.onSaveCallback()
+        }
+        win.Close()
+    })
+    cancelBtn := widget.NewButton(localization.GetString("form_button_cancel"), func() {
+        win.Close()
+    })
+
+    buttons := container.NewHBox(saveBtn, cancelBtn)
+    content := container.NewBorder(nil, buttons, nil, nil, form)
+    win.SetContent(content)
+    win.Resize(fyne.NewSize(700, 600))
+    win.Show()
 }
 
 // setupForm initializes the form fields
@@ -280,51 +379,49 @@ func (tf *TodoForm) onWarnTimeChanged(value float64) {
 
 // onSubmit handles form submission
 func (tf *TodoForm) onSubmit() {
-	// Validate required fields
-	if tf.nameEntry.Text == "" {
-		dialog.ShowError(errors.New(localization.GetString("error_name_required")), tf.window)
-		return
-	}
+    if err := tf.trySubmit(); err != nil {
+        dialog.ShowError(err, tf.window)
+        return
+    }
+    if tf.onSaveCallback != nil {
+        tf.onSaveCallback()
+    }
+}
 
-	// Use the selected date/time
-	todoTime := tf.selectedDateTime
-	if todoTime.IsZero() {
-		// Fallback to current time if not set
-		todoTime = time.Now()
-	}
+// trySubmit validates and saves the todo, returning error on failure
+func (tf *TodoForm) trySubmit() error {
+    if tf.nameEntry.Text == "" {
+        return errors.New(localization.GetString("error_name_required"))
+    }
 
-	// Create todo item
-	todo := models.NewTodoItem()
-	todo.Name = tf.nameEntry.Text
-	todo.Content = tf.contentEntry.Text
-	todo.Place = tf.placeEntry.Text
-	todo.Label = tf.labelEntry.Text
-	todo.Kind = tf.kindSelect.SelectedIndex()
-	todo.Level = tf.prioritySelect.SelectedIndex()
-	todo.TodoTime = todoTime
-	todo.WarnTime = int(tf.warnTimeSlider.Value)
+    // Use the selected date/time
+    todoTime := tf.selectedDateTime
+    if todoTime.IsZero() {
+        todoTime = time.Now()
+    }
 
-	// Save todo
-	var err error
-	if tf.isEditMode {
-		// Update existing todo
-		err = tf.dataManager.UpdateTodo(todo, tf.originalTime)
-	} else {
-		// Create new todo
-		err = tf.dataManager.AddTodo(todo)
-	}
+    // Create todo item
+    todo := models.NewTodoItem()
+    todo.Name = tf.nameEntry.Text
+    todo.Content = tf.contentEntry.Text
+    todo.Place = tf.placeEntry.Text
+    todo.Label = tf.labelEntry.Text
+    todo.Kind = tf.kindSelect.SelectedIndex()
+    todo.Level = tf.prioritySelect.SelectedIndex()
+    todo.TodoTime = todoTime
+    todo.WarnTime = int(tf.warnTimeSlider.Value)
 
-	if err != nil {
-		dialog.ShowError(err, tf.window)
-		return
-	}
-
-	// Call save callback
-	if tf.onSaveCallback != nil {
-		tf.onSaveCallback()
-	}
-
-	// Dialog will be closed automatically by the form buttons
+    // Save todo
+    var err error
+    if tf.isEditMode {
+        err = tf.dataManager.UpdateTodo(todo, tf.originalTime)
+    } else {
+        err = tf.dataManager.AddTodo(todo)
+    }
+    if err != nil {
+        return err
+    }
+    return nil
 }
 
 // onCancel handles form cancellation

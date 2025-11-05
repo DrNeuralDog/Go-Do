@@ -8,16 +8,17 @@ import (
 // TodoItem represents a single todo item with all its properties
 // This struct matches the original C++ TodoItem class structure
 type TodoItem struct {
-	Name     string    `json:"name"`     // Todo item name
-	Content  string    `json:"content"`  // Detailed content/description
-	Place    string    `json:"place"`    // Location information
-	Label    string    `json:"label"`    // Custom label/tag
-	Kind     int       `json:"kind"`     // Type: 0=Event, 1=Task
-	Level    int       `json:"level"`    // Priority level: 0=Low, 1=Medium, 2=High, 3=Urgent
-	TodoTime time.Time `json:"todoTime"` // Due date and time
-	Done     bool      `json:"done"`     // Completion status
-	WarnTime int       `json:"warnTime"` // Reminder time in minutes before due time
-	Starred  bool      `json:"starred"`  // Mark as important
+	Name     string    `json:"name"`                                   // Todo item name
+	Content  string    `json:"content"`                                // Detailed content/description
+	Place    string    `json:"place"`                                  // Location information
+	Label    string    `json:"label"`                                  // Custom label/tag
+	Kind     int       `json:"kind"`                                   // Type: 0=Event, 1=Task
+	Level    int       `json:"level"`                                  // Priority level: 0=Low, 1=Medium, 2=High, 3=Urgent
+	TodoTime time.Time `json:"todoTime"`                               // Due date and time
+	Done     bool      `json:"done"`                                   // Completion status
+	WarnTime int       `json:"warnTime"`                               // Reminder time in minutes before due time
+	Starred  bool      `json:"starred"`                                // Mark as important
+	Order    int       `json:"order,omitempty" yaml:"order,omitempty"` // Implicit UI order within a day (0 = unset)
 }
 
 // NewTodoItem creates a new TodoItem with default values
@@ -67,6 +68,16 @@ func (t *TodoItem) SetWarnTime(warnTime int) {
 
 func (t *TodoItem) MarkAsDone(done bool) {
 	t.Done = done
+}
+
+// SetOrder sets the implicit order value for UI sorting within the same day
+func (t *TodoItem) SetOrder(order int) {
+	t.Order = order
+}
+
+// GetOrder returns the implicit UI order value
+func (t *TodoItem) GetOrder() int {
+	return t.Order
 }
 
 // Getters
