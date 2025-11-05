@@ -3,6 +3,7 @@ package forms
 import (
 	"errors"
 	"fmt"
+	"image/color"
 	"time"
 
 	"todo-list-migration/src/localization"
@@ -10,8 +11,11 @@ import (
 	"todo-list-migration/src/persistence"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/driver/desktop"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -143,96 +147,114 @@ func (tf *TodoForm) ShowEditDialog(todo *models.TodoItem, originalTime time.Time
 
 // ShowCreateWindow opens the form in a standalone window for creating a new todo
 func (tf *TodoForm) ShowCreateWindow(onSave func()) {
-    tf.isEditMode = false
-    tf.onSaveCallback = onSave
-    tf.resetForm()
+	tf.isEditMode = false
+	tf.onSaveCallback = onSave
+	tf.resetForm()
 
-    title := localization.GetString("form_title_add")
-    win := fyne.CurrentApp().NewWindow(title)
-    tf.window = win
+	title := localization.GetString("form_title_add")
 
-    // Build form content
-    form := &widget.Form{
-        Items: []*widget.FormItem{
-            {Text: "Name:", Widget: tf.nameEntry},
-            {Text: "Date/Time:", Widget: container.NewBorder(nil, nil, nil, tf.dateTimeButton, tf.dateTimeEntry)},
-            {Text: "Location:", Widget: tf.placeEntry},
-            {Text: "Label:", Widget: tf.labelEntry},
-            {Text: "Type:", Widget: tf.kindSelect},
-            {Text: "Priority:", Widget: tf.prioritySelect},
-            {Text: "Content:", Widget: container.NewScroll(tf.contentEntry)},
-            {Text: "Reminder:", Widget: container.NewVBox(tf.warnTimeSlider, tf.warnTimeLabel)},
-        },
-    }
+	// Compute window size based on main window
+	parent := tf.window
+	parentSize := fyne.NewSize(700, 600)
+	if parent != nil && parent.Canvas() != nil {
+		parentSize = parent.Canvas().Size()
+	}
+	targetW := parentSize.Width
+	targetH := parentSize.Height * 0.7
 
-    // Buttons
-    addBtn := widget.NewButton(localization.GetString("form_button_add"), func() {
-        if err := tf.trySubmit(); err != nil {
-            dialog.ShowError(err, tf.window)
-            return
-        }
-        if tf.onSaveCallback != nil {
-            tf.onSaveCallback()
-        }
-        win.Close()
-    })
-    cancelBtn := widget.NewButton(localization.GetString("form_button_cancel"), func() {
-        win.Close()
-    })
+	win := fyne.CurrentApp().NewWindow(title)
+	tf.window = win
 
-    buttons := container.NewHBox(addBtn, cancelBtn)
-    content := container.NewBorder(nil, buttons, nil, nil, form)
-    win.SetContent(content)
-    win.Resize(fyne.NewSize(700, 600))
-    win.Show()
+	// Build custom form content with styled labels
+	rows := []fyne.CanvasObject{
+		tf.makeRowLabel("Name:", tf.nameEntry),
+		tf.makeRowLabel("Date/Time:", container.NewBorder(nil, nil, nil, tf.dateTimeButton, tf.dateTimeEntry)),
+		tf.makeRowLabel("Location:", tf.placeEntry),
+		tf.makeRowLabel("Label:", tf.labelEntry),
+		tf.makeRowLabel("Type:", tf.kindSelect),
+		tf.makeRowLabel("Priority:", tf.prioritySelect),
+		tf.makeRowLabel("Content:", container.NewScroll(tf.contentEntry)),
+		tf.makeRowLabel("Reminder:", container.NewVBox(tf.warnTimeSlider, tf.warnTimeLabel)),
+	}
+	formBox := container.NewVBox(rows...)
+
+	// Buttons
+	addBtn := widget.NewButton(localization.GetString("form_button_add"), func() {
+		if err := tf.trySubmit(); err != nil {
+			dialog.ShowError(err, tf.window)
+			return
+		}
+		if tf.onSaveCallback != nil {
+			tf.onSaveCallback()
+		}
+		win.Close()
+	})
+	cancelBtn := tf.makeCancelButton(localization.GetString("form_button_cancel"), func() { win.Close() })
+
+	// Center buttons and set order: Cancel (left), Add (right)
+	buttons := container.NewCenter(container.NewHBox(cancelBtn, addBtn))
+	content := container.NewBorder(nil, buttons, nil, nil, formBox)
+	win.SetContent(content)
+	win.SetFixedSize(true)
+	win.Resize(fyne.NewSize(targetW, targetH))
+	win.Show()
 }
 
 // ShowEditWindow opens the form in a standalone window for editing an existing todo
 func (tf *TodoForm) ShowEditWindow(todo *models.TodoItem, originalTime time.Time, onSave func()) {
-    tf.isEditMode = true
-    tf.originalTodo = todo
-    tf.originalTime = originalTime
-    tf.onSaveCallback = onSave
-    tf.populateForm(todo)
+	tf.isEditMode = true
+	tf.originalTodo = todo
+	tf.originalTime = originalTime
+	tf.onSaveCallback = onSave
+	tf.populateForm(todo)
 
-    title := localization.GetString("form_title_edit")
-    win := fyne.CurrentApp().NewWindow(title)
-    tf.window = win
+	title := localization.GetString("form_title_edit")
 
-    // Build form content
-    form := &widget.Form{
-        Items: []*widget.FormItem{
-            {Text: "Name:", Widget: tf.nameEntry},
-            {Text: "Date/Time:", Widget: container.NewBorder(nil, nil, nil, tf.dateTimeButton, tf.dateTimeEntry)},
-            {Text: "Location:", Widget: tf.placeEntry},
-            {Text: "Label:", Widget: tf.labelEntry},
-            {Text: "Type:", Widget: tf.kindSelect},
-            {Text: "Priority:", Widget: tf.prioritySelect},
-            {Text: "Content:", Widget: container.NewScroll(tf.contentEntry)},
-            {Text: "Reminder:", Widget: container.NewVBox(tf.warnTimeSlider, tf.warnTimeLabel)},
-        },
-    }
+	// Compute window size based on main window
+	parent := tf.window
+	parentSize := fyne.NewSize(700, 600)
+	if parent != nil && parent.Canvas() != nil {
+		parentSize = parent.Canvas().Size()
+	}
+	targetW := parentSize.Width
+	targetH := parentSize.Height * 0.7
 
-    // Buttons
-    saveBtn := widget.NewButton(localization.GetString("form_button_save"), func() {
-        if err := tf.trySubmit(); err != nil {
-            dialog.ShowError(err, tf.window)
-            return
-        }
-        if tf.onSaveCallback != nil {
-            tf.onSaveCallback()
-        }
-        win.Close()
-    })
-    cancelBtn := widget.NewButton(localization.GetString("form_button_cancel"), func() {
-        win.Close()
-    })
+	win := fyne.CurrentApp().NewWindow(title)
+	tf.window = win
 
-    buttons := container.NewHBox(saveBtn, cancelBtn)
-    content := container.NewBorder(nil, buttons, nil, nil, form)
-    win.SetContent(content)
-    win.Resize(fyne.NewSize(700, 600))
-    win.Show()
+	// Build custom form content with styled labels
+	rows := []fyne.CanvasObject{
+		tf.makeRowLabel("Name:", tf.nameEntry),
+		tf.makeRowLabel("Date/Time:", container.NewBorder(nil, nil, nil, tf.dateTimeButton, tf.dateTimeEntry)),
+		tf.makeRowLabel("Location:", tf.placeEntry),
+		tf.makeRowLabel("Label:", tf.labelEntry),
+		tf.makeRowLabel("Type:", tf.kindSelect),
+		tf.makeRowLabel("Priority:", tf.prioritySelect),
+		tf.makeRowLabel("Content:", container.NewScroll(tf.contentEntry)),
+		tf.makeRowLabel("Reminder:", container.NewVBox(tf.warnTimeSlider, tf.warnTimeLabel)),
+	}
+	formBox := container.NewVBox(rows...)
+
+	// Buttons
+	saveBtn := widget.NewButton(localization.GetString("form_button_save"), func() {
+		if err := tf.trySubmit(); err != nil {
+			dialog.ShowError(err, tf.window)
+			return
+		}
+		if tf.onSaveCallback != nil {
+			tf.onSaveCallback()
+		}
+		win.Close()
+	})
+	cancelBtn := tf.makeCancelButton(localization.GetString("form_button_cancel"), func() { win.Close() })
+
+	// Center buttons and set order: Cancel (left), Save (right)
+	buttons := container.NewCenter(container.NewHBox(cancelBtn, saveBtn))
+	content := container.NewBorder(nil, buttons, nil, nil, formBox)
+	win.SetContent(content)
+	win.SetFixedSize(true)
+	win.Resize(fyne.NewSize(targetW, targetH))
+	win.Show()
 }
 
 // setupForm initializes the form fields
@@ -379,50 +401,173 @@ func (tf *TodoForm) onWarnTimeChanged(value float64) {
 
 // onSubmit handles form submission
 func (tf *TodoForm) onSubmit() {
-    if err := tf.trySubmit(); err != nil {
-        dialog.ShowError(err, tf.window)
-        return
-    }
-    if tf.onSaveCallback != nil {
-        tf.onSaveCallback()
-    }
+	if err := tf.trySubmit(); err != nil {
+		dialog.ShowError(err, tf.window)
+		return
+	}
+	if tf.onSaveCallback != nil {
+		tf.onSaveCallback()
+	}
 }
 
 // trySubmit validates and saves the todo, returning error on failure
 func (tf *TodoForm) trySubmit() error {
-    if tf.nameEntry.Text == "" {
-        return errors.New(localization.GetString("error_name_required"))
-    }
+	if tf.nameEntry.Text == "" {
+		return errors.New(localization.GetString("error_name_required"))
+	}
 
-    // Use the selected date/time
-    todoTime := tf.selectedDateTime
-    if todoTime.IsZero() {
-        todoTime = time.Now()
-    }
+	// Use the selected date/time
+	todoTime := tf.selectedDateTime
+	if todoTime.IsZero() {
+		todoTime = time.Now()
+	}
 
-    // Create todo item
-    todo := models.NewTodoItem()
-    todo.Name = tf.nameEntry.Text
-    todo.Content = tf.contentEntry.Text
-    todo.Place = tf.placeEntry.Text
-    todo.Label = tf.labelEntry.Text
-    todo.Kind = tf.kindSelect.SelectedIndex()
-    todo.Level = tf.prioritySelect.SelectedIndex()
-    todo.TodoTime = todoTime
-    todo.WarnTime = int(tf.warnTimeSlider.Value)
+	// Create todo item
+	todo := models.NewTodoItem()
+	todo.Name = tf.nameEntry.Text
+	todo.Content = tf.contentEntry.Text
+	todo.Place = tf.placeEntry.Text
+	todo.Label = tf.labelEntry.Text
+	todo.Kind = tf.kindSelect.SelectedIndex()
+	todo.Level = tf.prioritySelect.SelectedIndex()
+	todo.TodoTime = todoTime
+	todo.WarnTime = int(tf.warnTimeSlider.Value)
 
-    // Save todo
-    var err error
-    if tf.isEditMode {
-        err = tf.dataManager.UpdateTodo(todo, tf.originalTime)
-    } else {
-        err = tf.dataManager.AddTodo(todo)
-    }
-    if err != nil {
-        return err
-    }
-    return nil
+	// Save todo
+	var err error
+	if tf.isEditMode {
+		err = tf.dataManager.UpdateTodo(todo, tf.originalTime)
+	} else {
+		err = tf.dataManager.AddTodo(todo)
+	}
+	if err != nil {
+		return err
+	}
+	return nil
 }
+
+// makeRowLabel creates a two-column row with a styled label and a widget
+func (tf *TodoForm) makeRowLabel(label string, w fyne.CanvasObject) fyne.CanvasObject {
+	lbl := tf.makeStyledLabel(label)
+	return container.NewGridWithColumns(2, lbl, w)
+}
+
+// makeStyledLabel builds a label that is bold and white in light themes
+func (tf *TodoForm) makeStyledLabel(text string) fyne.CanvasObject {
+	col := theme.Color(theme.ColorNameForeground)
+	n := color.NRGBAModel.Convert(col).(color.NRGBA)
+	if tf.isLightTheme() {
+		n = color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0xFF}
+	}
+	t := canvas.NewText(text, n)
+	if tf.isLightTheme() {
+		t.TextStyle = fyne.TextStyle{Bold: true}
+	}
+	return container.NewMax(container.NewCenter(t))
+}
+
+// isLightTheme attempts to detect if current theme background is light
+func (tf *TodoForm) isLightTheme() bool {
+	bg := theme.Color(theme.ColorNameBackground)
+	n := color.NRGBAModel.Convert(bg).(color.NRGBA)
+	// relative luminance
+	l := 0.2126*float64(n.R)/255.0 + 0.7152*float64(n.G)/255.0 + 0.0722*float64(n.B)/255.0
+	return l > 0.5
+}
+
+// makeCancelButton returns a rectangular button 20% lighter than the current background
+func (tf *TodoForm) makeCancelButton(text string, onTap func()) fyne.CanvasObject {
+	bg := theme.Color(theme.ColorNameBackground)
+	n := color.NRGBAModel.Convert(bg).(color.NRGBA)
+	light := tf.lighten(n, 0.20)
+	fg := theme.Color(theme.ColorNameForeground)
+	fn := color.NRGBAModel.Convert(fg).(color.NRGBA)
+	btn := &rectButton{
+		Text:     text,
+		Bg:       light,
+		Fg:       fn,
+		SizeHint: fyne.NewSize(100, 44),
+		OnTapped: onTap,
+	}
+	btn.ExtendBaseWidget(btn)
+	return btn
+}
+
+// helpers for color ops
+func (tf *TodoForm) lighten(c color.NRGBA, amount float32) color.NRGBA {
+	if amount < 0 {
+		amount = 0
+	}
+	if amount > 1 {
+		amount = 1
+	}
+	mix := func(v uint8) uint8 {
+		return uint8(float32(v)*(1-amount) + 255*amount)
+	}
+	return color.NRGBA{R: mix(c.R), G: mix(c.G), B: mix(c.B), A: c.A}
+}
+
+// rectButton is a minimal custom button used for Cancel styling
+type rectButton struct {
+	widget.BaseWidget
+	Text     string
+	Bg       color.NRGBA
+	Fg       color.NRGBA
+	SizeHint fyne.Size
+	OnTapped func()
+	hovered  bool
+}
+
+func (b *rectButton) CreateRenderer() fyne.WidgetRenderer {
+	bg := canvas.NewRectangle(b.Bg)
+	bg.CornerRadius = 8
+	txt := canvas.NewText(b.Text, b.Fg)
+	txt.Alignment = fyne.TextAlignCenter
+	cont := container.NewMax(bg, container.NewCenter(txt))
+	return &rectButtonRenderer{btn: b, bg: bg, txt: txt, cont: cont}
+}
+
+type rectButtonRenderer struct {
+	btn  *rectButton
+	bg   *canvas.Rectangle
+	txt  *canvas.Text
+	cont *fyne.Container
+}
+
+func (r *rectButtonRenderer) Layout(size fyne.Size)                { r.cont.Resize(size) }
+func (r *rectButtonRenderer) MinSize() fyne.Size                   { return r.btn.MinSize() }
+func (r *rectButtonRenderer) BackgroundColor() fyne.ThemeColorName { return "" }
+func (r *rectButtonRenderer) Objects() []fyne.CanvasObject         { return []fyne.CanvasObject{r.cont} }
+func (r *rectButtonRenderer) Destroy()                             {}
+func (r *rectButtonRenderer) Refresh() {
+	// slight hover lightening
+	bg := r.btn.Bg
+	if r.btn.hovered {
+		bg = color.NRGBA{R: uint8(float32(bg.R)*0.92 + 255*0.08), G: uint8(float32(bg.G)*0.92 + 255*0.08), B: uint8(float32(bg.B)*0.92 + 255*0.08), A: bg.A}
+	}
+	r.bg.FillColor = bg
+	r.bg.Refresh()
+	r.txt.Text = r.btn.Text
+	r.txt.Color = r.btn.Fg
+	r.txt.Refresh()
+}
+
+func (b *rectButton) MinSize() fyne.Size {
+	if b.SizeHint.Width > 0 && b.SizeHint.Height > 0 {
+		return b.SizeHint
+	}
+	return fyne.NewSize(100, 44)
+}
+
+func (b *rectButton) Tapped(*fyne.PointEvent) {
+	if b.OnTapped != nil {
+		b.OnTapped()
+	}
+}
+
+func (b *rectButton) MouseIn(*desktop.MouseEvent)    { b.hovered = true; b.Refresh() }
+func (b *rectButton) MouseMoved(*desktop.MouseEvent) {}
+func (b *rectButton) MouseOut()                      { b.hovered = false; b.Refresh() }
 
 // onCancel handles form cancellation
 func (tf *TodoForm) onCancel() {
