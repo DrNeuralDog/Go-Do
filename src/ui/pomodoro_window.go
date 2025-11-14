@@ -166,7 +166,7 @@ func (pw *PomodoroWindow) setupUI() {
     } else {
         tickBg = hex("#504945")
     }
-    pw.progressRing = NewProgressRing(hex("#fb4934"), tickBg)
+    pw.progressRing = NewProgressRing(tickBg)
 
     // Layout
     ringWithDigits := container.NewMax(
@@ -252,8 +252,8 @@ func (pw *PomodoroWindow) tick() {
     pw.sessionsCanvas.Text = sessionsText
     pw.sessionsCanvas.Refresh()
 
-    // Update progress ring (remaining fraction, clockwise from left)
-    var prog float32 = 1
+    // Update progress ring (elapsed fraction, fills clockwise from left)
+    var prog float32 = 0
     total := pw.timer.GetCurrentDuration()
     // Handle paused/unknown state by estimating total from config
     if (pw.timer.State == models.PomodoroPaused || total == 0) && pw.timer.TimeRemaining > 0 {
@@ -274,7 +274,9 @@ func (pw *PomodoroWindow) tick() {
         total = best
     }
     if pw.timer.State != models.PomodoroIdle && total > 0 {
-        prog = float32(pw.timer.TimeRemaining.Seconds() / total.Seconds())
+        // Calculate elapsed fraction instead of remaining
+        elapsed := total - pw.timer.TimeRemaining
+        prog = float32(elapsed.Seconds() / total.Seconds())
         if prog < 0 {
             prog = 0
         }
@@ -310,22 +312,24 @@ func (pw *PomodoroWindow) tick() {
 // ProgressRing renders a circular segmented progress indicator.
 type ProgressRing struct {
     widget.BaseWidget
-    Progress    float32      // 0..1 of remaining progress
+    Progress    float32      // 0..1 of elapsed progress
     Segments    int          // number of segments around the circle
     StartAngle  float64      // radians; 0 is right, pi is left
-    FillColor   color.Color  // color for filled segments
+    StartColor  color.Color  // color at start (green)
+    EndColor    color.Color  // color at end (red)
     BgColor     color.Color  // color for background segments
     InnerRatio  float32      // inner radius ratio relative to half of min(size)
     SegLength   float32      // length of each radial segment in px
     StrokeWidth float32      // thickness of each segment
 }
 
-func NewProgressRing(fill, bg color.Color) *ProgressRing {
+func NewProgressRing(bg color.Color) *ProgressRing {
     pr := &ProgressRing{
-        Progress:    1,
+        Progress:    0,
         Segments:    90,
         StartAngle:  math.Pi, // start from left side
-        FillColor:   fill,
+        StartColor:  hex("#b8bb26"), // Gruvbox green - start
+        EndColor:    hex("#fb4934"), // Gruvbox red - end
         BgColor:     bg,
         InnerRatio:  0.68,
         SegLength:   14,
@@ -402,7 +406,7 @@ func (r *progressRingRenderer) MinSize() fyne.Size {
 }
 
 func (r *progressRingRenderer) Refresh() {
-    // recolor based on current progress
+    // recolor based on current progress with gradient
     filled := int(float64(r.ring.Segments) * float64(r.ring.Progress) + 0.5)
     if filled < 0 {
         filled = 0
@@ -410,9 +414,19 @@ func (r *progressRingRenderer) Refresh() {
     if filled > r.ring.Segments {
         filled = r.ring.Segments
     }
+
+    // Extract RGB components from start and end colors
+    sr, sg, sb, _ := r.ring.StartColor.RGBA()
+    er, eg, eb, _ := r.ring.EndColor.RGBA()
+
     for i := 0; i < r.ring.Segments; i++ {
         if i < filled {
-            r.lines[i].StrokeColor = r.ring.FillColor
+            // Calculate gradient color for this segment
+            t := float32(i) / float32(r.ring.Segments)
+            nr := uint8((float32(sr>>8)*(1-t) + float32(er>>8)*t))
+            ng := uint8((float32(sg>>8)*(1-t) + float32(eg>>8)*t))
+            nb := uint8((float32(sb>>8)*(1-t) + float32(eb>>8)*t))
+            r.lines[i].StrokeColor = color.RGBA{R: nr, G: ng, B: nb, A: 255}
         } else {
             r.lines[i].StrokeColor = r.ring.BgColor
         }
