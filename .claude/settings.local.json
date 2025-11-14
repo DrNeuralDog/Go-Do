@@ -5,7 +5,13 @@
       "Bash(go test:*)",
       "Bash(./bin/todo-list.exe:*)",
       "Bash(taskkill:*)",
-      "Bash(nul)"
+      "Bash(nul)",
+      "Bash(if not exist \".vscode\" mkdir .vscode)",
+      "Bash(if [ ! -d \".vscode\" ])",
+      "Bash(then mkdir .vscode)",
+      "Bash(fi)",
+      "Bash(dir:*)",
+      "Bash(.bintodo-list.exe)"
     ],
     "deny": [],
     "ask": []
