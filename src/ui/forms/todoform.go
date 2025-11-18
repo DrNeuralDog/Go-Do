@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"image/color"
+	"math"
 	"time"
 
 	"todo-list-migration/src/localization"
@@ -33,8 +34,8 @@ type TodoForm struct {
 	dateTimeButton *widget.Button
 	prioritySelect *widget.Select
 	kindSelect     *widget.Select
-	warnTimeSlider *widget.Slider
-	warnTimeLabel  *widget.Label
+	warnTimeSlider *ReminderSlider
+	warnTimeLabel  *canvas.Text
 
 	// Date/Time picker components
 	selectedDateTime time.Time
@@ -159,8 +160,12 @@ func (tf *TodoForm) ShowCreateWindow(onSave func()) {
 	if parent != nil && parent.Canvas() != nil {
 		parentSize = parent.Canvas().Size()
 	}
-	targetW := parentSize.Width
-	targetH := parentSize.Height * 0.7
+	targetW := parentSize.Width - 40
+	if targetW < 200 {
+		targetW = parentSize.Width // fallback, just in case
+	}
+	// Make the standalone window noticeably more compact in height
+	targetH := parentSize.Height * 0.45
 
 	win := fyne.CurrentApp().NewWindow(title)
 	tf.window = win
@@ -176,10 +181,18 @@ func (tf *TodoForm) ShowCreateWindow(onSave func()) {
 		tf.makeRowLabel("Content:", container.NewScroll(tf.contentEntry)),
 		tf.makeRowLabel("Reminder:", container.NewVBox(tf.warnTimeSlider, tf.warnTimeLabel)),
 	}
-	formBox := container.NewVBox(rows...)
+	// Add vertical spacing between rows so fields don't stick together
+	spacedRows := make([]fyne.CanvasObject, 0, len(rows)*2-1)
+	for i, r := range rows {
+		if i > 0 {
+			spacedRows = append(spacedRows, newVSpacer(5))
+		}
+		spacedRows = append(spacedRows, r)
+	}
+	formBox := container.NewVBox(spacedRows...)
 
 	// Buttons
-	addBtn := widget.NewButton(localization.GetString("form_button_add"), func() {
+	addBtn := tf.makePrimaryButton(localization.GetString("form_button_add"), func() {
 		if err := tf.trySubmit(); err != nil {
 			dialog.ShowError(err, tf.window)
 			return
@@ -192,8 +205,12 @@ func (tf *TodoForm) ShowCreateWindow(onSave func()) {
 	cancelBtn := tf.makeCancelButton(localization.GetString("form_button_cancel"), func() { win.Close() })
 
 	// Center buttons and set order: Cancel (left), Add (right)
-	buttons := container.NewCenter(container.NewHBox(cancelBtn, addBtn))
-	content := container.NewBorder(nil, buttons, nil, nil, formBox)
+	buttonRow := container.NewCenter(container.NewHBox(cancelBtn, addBtn))
+	// Extra space between Reminder text and buttons
+	bottomWithSpacer := container.NewVBox(newVSpacer(30), buttonRow)
+	// Wrap form in padding and add a bit of top margin so fields are not glued to the window edges
+	paddedForm := container.NewPadded(formBox)
+	content := container.NewBorder(newVSpacer(10), bottomWithSpacer, nil, nil, paddedForm)
 	win.SetContent(content)
 	win.SetFixedSize(true)
 	win.Resize(fyne.NewSize(targetW, targetH))
@@ -216,8 +233,12 @@ func (tf *TodoForm) ShowEditWindow(todo *models.TodoItem, originalTime time.Time
 	if parent != nil && parent.Canvas() != nil {
 		parentSize = parent.Canvas().Size()
 	}
-	targetW := parentSize.Width
-	targetH := parentSize.Height * 0.7
+	targetW := parentSize.Width - 40
+	if targetW < 200 {
+		targetW = parentSize.Width
+	}
+	// Match compact height used in ShowCreateWindow
+	targetH := parentSize.Height * 0.45
 
 	win := fyne.CurrentApp().NewWindow(title)
 	tf.window = win
@@ -233,10 +254,18 @@ func (tf *TodoForm) ShowEditWindow(todo *models.TodoItem, originalTime time.Time
 		tf.makeRowLabel("Content:", container.NewScroll(tf.contentEntry)),
 		tf.makeRowLabel("Reminder:", container.NewVBox(tf.warnTimeSlider, tf.warnTimeLabel)),
 	}
-	formBox := container.NewVBox(rows...)
+	// Add vertical spacing between rows so fields don't stick together
+	spacedRows := make([]fyne.CanvasObject, 0, len(rows)*2-1)
+	for i, r := range rows {
+		if i > 0 {
+			spacedRows = append(spacedRows, newVSpacer(5))
+		}
+		spacedRows = append(spacedRows, r)
+	}
+	formBox := container.NewVBox(spacedRows...)
 
 	// Buttons
-	saveBtn := widget.NewButton(localization.GetString("form_button_save"), func() {
+	saveBtn := tf.makePrimaryButton(localization.GetString("form_button_save"), func() {
 		if err := tf.trySubmit(); err != nil {
 			dialog.ShowError(err, tf.window)
 			return
@@ -249,8 +278,11 @@ func (tf *TodoForm) ShowEditWindow(todo *models.TodoItem, originalTime time.Time
 	cancelBtn := tf.makeCancelButton(localization.GetString("form_button_cancel"), func() { win.Close() })
 
 	// Center buttons and set order: Cancel (left), Save (right)
-	buttons := container.NewCenter(container.NewHBox(cancelBtn, saveBtn))
-	content := container.NewBorder(nil, buttons, nil, nil, formBox)
+	buttonRow := container.NewCenter(container.NewHBox(cancelBtn, saveBtn))
+	bottomWithSpacer := container.NewVBox(newVSpacer(30), buttonRow)
+	// Wrap form in padding and add a bit of top margin so fields are not glued to the window edges
+	paddedForm := container.NewPadded(formBox)
+	content := container.NewBorder(newVSpacer(10), bottomWithSpacer, nil, nil, paddedForm)
 	win.SetContent(content)
 	win.SetFixedSize(true)
 	win.Resize(fyne.NewSize(targetW, targetH))
@@ -306,12 +338,14 @@ func (tf *TodoForm) setupForm() {
 	tf.kindSelect.SetSelectedIndex(0)
 
 	// Warning time slider (0-864 minutes = 0-14.4 hours)
-	tf.warnTimeSlider = widget.NewSlider(0, 864)
+	tf.warnTimeSlider = NewReminderSlider(0, 864)
 	tf.warnTimeSlider.Step = 5
 	tf.warnTimeSlider.Value = 0
 	tf.warnTimeSlider.OnChanged = tf.onWarnTimeChanged
 
-	tf.warnTimeLabel = widget.NewLabel(localization.GetString("reminder_none"))
+	// Reminder label: use custom-colored canvas text so it stays visible
+	// on the dark "light" theme background.
+	tf.warnTimeLabel = canvas.NewText(localization.GetString("reminder_none"), tf.reminderLabelColor())
 	tf.warnTimeLabel.Alignment = fyne.TextAlignCenter
 }
 
@@ -332,7 +366,7 @@ func (tf *TodoForm) resetForm() {
 
 	tf.prioritySelect.SetSelectedIndex(0)
 	tf.kindSelect.SetSelectedIndex(0)
-	tf.warnTimeSlider.Value = 0
+	tf.warnTimeSlider.SetValue(0)
 	tf.onWarnTimeChanged(0)
 }
 
@@ -350,7 +384,7 @@ func (tf *TodoForm) populateForm(todo *models.TodoItem) {
 
 	tf.prioritySelect.SetSelectedIndex(todo.Level)
 	tf.kindSelect.SetSelectedIndex(todo.Kind)
-	tf.warnTimeSlider.Value = float64(todo.WarnTime)
+	tf.warnTimeSlider.SetValue(float64(todo.WarnTime))
 	tf.onWarnTimeChanged(float64(todo.WarnTime))
 }
 
@@ -358,7 +392,9 @@ func (tf *TodoForm) populateForm(todo *models.TodoItem) {
 func (tf *TodoForm) onWarnTimeChanged(value float64) {
 	warnTime := int(value)
 	if warnTime == 0 {
-		tf.warnTimeLabel.SetText(localization.GetString("reminder_none"))
+		tf.warnTimeLabel.Text = localization.GetString("reminder_none")
+		tf.warnTimeLabel.Color = tf.reminderLabelColor()
+		tf.warnTimeLabel.Refresh()
 		return
 	}
 
@@ -392,11 +428,13 @@ func (tf *TodoForm) onWarnTimeChanged(value float64) {
 	}
 
 	if len(parts) == 0 {
-		tf.warnTimeLabel.SetText(localization.GetString("reminder_none"))
+		tf.warnTimeLabel.Text = localization.GetString("reminder_none")
 	} else {
 		reminderFormat := localization.GetString("reminder_format")
-		tf.warnTimeLabel.SetText(fmt.Sprintf(reminderFormat, joinStrings(parts, " ")))
+		tf.warnTimeLabel.Text = fmt.Sprintf(reminderFormat, joinStrings(parts, " "))
 	}
+	tf.warnTimeLabel.Color = tf.reminderLabelColor()
+	tf.warnTimeLabel.Refresh()
 }
 
 // onSubmit handles form submission
@@ -449,7 +487,9 @@ func (tf *TodoForm) trySubmit() error {
 // makeRowLabel creates a two-column row with a styled label and a widget
 func (tf *TodoForm) makeRowLabel(label string, w fyne.CanvasObject) fyne.CanvasObject {
 	lbl := tf.makeStyledLabel(label)
-	return container.NewGridWithColumns(2, lbl, w)
+	// Put label on the left and let the widget take all remaining width,
+	// so entries are noticeably wider than labels.
+	return container.NewBorder(nil, nil, lbl, nil, w)
 }
 
 // makeStyledLabel builds a label that is bold and white in light themes
@@ -463,16 +503,195 @@ func (tf *TodoForm) makeStyledLabel(text string) fyne.CanvasObject {
 	if tf.isLightTheme() {
 		t.TextStyle = fyne.TextStyle{Bold: true}
 	}
-	return container.NewMax(container.NewCenter(t))
+	// Fix label width so that all input fields start at the same X position.
+	labelWidth := float32(100)
+	labelHeight := t.TextSize + 8
+	return container.NewGridWrap(fyne.NewSize(labelWidth, labelHeight), container.NewCenter(t))
 }
 
-// isLightTheme attempts to detect if current theme background is light
+// isLightTheme returns true for the custom "light" theme and any truly light background,
+// so that labels can switch to bold white for better contrast.
 func (tf *TodoForm) isLightTheme() bool {
 	bg := theme.Color(theme.ColorNameBackground)
 	n := color.NRGBAModel.Convert(bg).(color.NRGBA)
+
+	// Our custom LightSoftTheme uses a dark gray background (#3c3c3c).
+	// Detect it explicitly so labels become white on that background.
+	if n.R == 0x3c && n.G == 0x3c && n.B == 0x3c {
+		return true
+	}
+
 	// relative luminance
 	l := 0.2126*float64(n.R)/255.0 + 0.7152*float64(n.G)/255.0 + 0.0722*float64(n.B)/255.0
 	return l > 0.5
+}
+
+// reminderLabelColor returns a color for the reminder text
+// that is always visible on the current theme background.
+func (tf *TodoForm) reminderLabelColor() color.Color {
+	col := theme.Color(theme.ColorNameForeground)
+	n := color.NRGBAModel.Convert(col).(color.NRGBA)
+	if tf.isLightTheme() {
+		// Force white text on dark "light" background.
+		return color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0xFF}
+	}
+	return n
+}
+
+// ReminderSlider is a minimal custom slider for the reminder time,
+// with a flat line and a clearly visible knob that adapts to the theme.
+type ReminderSlider struct {
+	widget.BaseWidget
+	Min, Max float64
+	Value    float64
+	Step     float64
+	OnChanged func(float64)
+}
+
+// NewReminderSlider creates a new ReminderSlider with the given range.
+func NewReminderSlider(min, max float64) *ReminderSlider {
+	s := &ReminderSlider{
+		Min:   min,
+		Max:   max,
+		Value: min,
+		Step:  0,
+	}
+	s.ExtendBaseWidget(s)
+	return s
+}
+
+// SetValue sets the slider value, clamped to range and snapped to Step.
+func (s *ReminderSlider) SetValue(v float64) {
+	if s.Max <= s.Min {
+		return
+	}
+	if v < s.Min {
+		v = s.Min
+	}
+	if v > s.Max {
+		v = s.Max
+	}
+	if s.Step > 0 {
+		v = math.Round(v/s.Step) * s.Step
+	}
+	if v == s.Value {
+		return
+	}
+	s.Value = v
+	if s.OnChanged != nil {
+		s.OnChanged(v)
+	}
+	s.Refresh()
+}
+
+// Tapped moves the knob to the tap position.
+func (s *ReminderSlider) Tapped(ev *fyne.PointEvent) {
+	s.updateFromPos(ev.Position, s.Size())
+}
+
+// Dragged updates the value during drag.
+func (s *ReminderSlider) Dragged(ev *fyne.DragEvent) {
+	s.updateFromPos(ev.Position, s.Size())
+}
+
+func (s *ReminderSlider) DragEnd() {}
+
+// updateFromPos converts a point inside the widget to a value.
+func (s *ReminderSlider) updateFromPos(pos fyne.Position, size fyne.Size) {
+	if s.Max <= s.Min {
+		return
+	}
+	padding := float32(12)
+	width := size.Width - 2*padding
+	if width <= 0 {
+		return
+	}
+	x := pos.X
+	if x < padding {
+		x = padding
+	}
+	if x > size.Width-padding {
+		x = size.Width - padding
+	}
+	ratio := float64((x - padding) / width)
+	v := s.Min + ratio*(s.Max-s.Min)
+	s.SetValue(v)
+}
+
+// CreateRenderer implements fyne.Widget.
+func (s *ReminderSlider) CreateRenderer() fyne.WidgetRenderer {
+	track := canvas.NewRectangle(theme.Color(theme.ColorNameSeparator))
+	knob := canvas.NewCircle(theme.Color(theme.ColorNamePrimary))
+	objs := []fyne.CanvasObject{track, knob}
+	return &reminderSliderRenderer{
+		slider: s,
+		track:  track,
+		knob:   knob,
+		objs:   objs,
+	}
+}
+
+type reminderSliderRenderer struct {
+	slider *ReminderSlider
+	track  *canvas.Rectangle
+	knob   *canvas.Circle
+	objs   []fyne.CanvasObject
+}
+
+func (r *reminderSliderRenderer) Layout(size fyne.Size) {
+	padding := float32(12)
+	centerY := size.Height / 2
+	trackHeight := float32(4)
+
+	// Track spans the full width used by other inputs.
+	trackWidth := size.Width - 2*padding
+	if trackWidth < 0 {
+		trackWidth = 0
+	}
+	r.track.Resize(fyne.NewSize(trackWidth, trackHeight))
+	r.track.Move(fyne.NewPos(padding, centerY-trackHeight/2))
+
+	// Knob position based on value.
+	if r.slider.Max > r.slider.Min {
+		ratio := float32((r.slider.Value - r.slider.Min) / (r.slider.Max - r.slider.Min))
+		if ratio < 0 {
+			ratio = 0
+		}
+		if ratio > 1 {
+			ratio = 1
+		}
+		x := padding + ratio*trackWidth
+		knobRadius := float32(8)
+		r.knob.Resize(fyne.NewSize(knobRadius*2, knobRadius*2))
+		r.knob.Move(fyne.NewPos(x-knobRadius, centerY-knobRadius))
+	}
+}
+
+func (r *reminderSliderRenderer) MinSize() fyne.Size {
+	// Height chosen to give comfortable click/drag target.
+	return fyne.NewSize(100, 32)
+}
+
+func (r *reminderSliderRenderer) Refresh() {
+	// Update colors according to theme.
+	r.track.FillColor = theme.Color(theme.ColorNameSeparator)
+	r.track.Refresh()
+	r.knob.FillColor = theme.Color(theme.ColorNamePrimary)
+	r.knob.Refresh()
+
+	// Re-layout in case size or value changed.
+	r.Layout(r.slider.Size())
+}
+
+func (r *reminderSliderRenderer) BackgroundColor() fyne.ThemeColorName { return "" }
+func (r *reminderSliderRenderer) Objects() []fyne.CanvasObject         { return r.objs }
+func (r *reminderSliderRenderer) Destroy()                             {}
+
+// newVSpacer creates a transparent vertical spacer with fixed height.
+func newVSpacer(height float32) fyne.CanvasObject {
+	r := canvas.NewRectangle(color.NRGBA{R: 0, G: 0, B: 0, A: 0})
+	r.SetMinSize(fyne.NewSize(1, height))
+	return r
 }
 
 // makeCancelButton returns a rectangular button 20% lighter than the current background
@@ -485,6 +704,23 @@ func (tf *TodoForm) makeCancelButton(text string, onTap func()) fyne.CanvasObjec
 	btn := &rectButton{
 		Text:     text,
 		Bg:       light,
+		Fg:       fn,
+		SizeHint: fyne.NewSize(100, 44),
+		OnTapped: onTap,
+	}
+	btn.ExtendBaseWidget(btn)
+	return btn
+}
+
+// makePrimaryButton returns a rectangular button using the primary accent color.
+func (tf *TodoForm) makePrimaryButton(text string, onTap func()) fyne.CanvasObject {
+	bg := theme.Color(theme.ColorNamePrimary)
+	n := color.NRGBAModel.Convert(bg).(color.NRGBA)
+	fg := theme.Color(theme.ColorNameForeground)
+	fn := color.NRGBAModel.Convert(fg).(color.NRGBA)
+	btn := &rectButton{
+		Text:     text,
+		Bg:       n,
 		Fg:       fn,
 		SizeHint: fyne.NewSize(100, 44),
 		OnTapped: onTap,
@@ -522,6 +758,7 @@ func (b *rectButton) CreateRenderer() fyne.WidgetRenderer {
 	bg := canvas.NewRectangle(b.Bg)
 	bg.CornerRadius = 8
 	txt := canvas.NewText(b.Text, b.Fg)
+	txt.TextStyle = fyne.TextStyle{Bold: true}
 	txt.Alignment = fyne.TextAlignCenter
 	cont := container.NewMax(bg, container.NewCenter(txt))
 	return &rectButtonRenderer{btn: b, bg: bg, txt: txt, cont: cont}

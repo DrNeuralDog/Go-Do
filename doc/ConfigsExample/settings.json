@@ -1,0 +1,15 @@
+{
+    "cmake.generator": "MinGW Makefiles",
+    "cmake.configureSettings": {
+        "CMAKE_C_COMPILER": "C:/LifeApps/QtNew/Tools/mingw810_64/bin/gcc.exe",
+        "CMAKE_CXX_COMPILER": "C:/LifeApps/QtNew/Tools/mingw810_64/bin/g++.exe",
+        "QT_QMAKE_EXECUTABLE": "C:/LifeApps/QtNew/5.15.2/mingw81_64/bin/qmake.exe",
+        "CMAKE_PREFIX_PATH": "C:/LifeApps/QtNew/5.15.2/mingw81_64"
+    },
+    "cmake.environment": {
+        "PATH": "C:/LifeApps/QtNew/5.15.2/mingw81_64/bin;C:/LifeApps/QtNew/Tools/mingw810_64/bin;${env:PATH}"
+    },
+    "cmake.useCMakePresets": "never"
+}
+
+

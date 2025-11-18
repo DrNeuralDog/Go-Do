@@ -1,0 +1,24 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Run (CMake target) in terminal",
+            "type": "shell",
+            "command": "${command:cmake.launchTargetPath}",
+            "options": {
+                "cwd": "${command:cmake.launchTargetDirectory}",
+                "env": {
+                    "PATH": "C:/LifeApps/QtNew/5.15.2/mingw81_64/bin;C:/LifeApps/QtNew/Tools/mingw810_64/bin;${env:PATH}",
+                    "QT_FORCE_STDERR_LOGGING": "1",
+                    "QT_LOGGING_RULES": "*.debug=true;qt.qpa.*=false"
+                }
+            },
+            "dependsOn": [
+                "CMake: build"
+            ],
+            "problemMatcher": []
+        }
+    ]
+}
+
+

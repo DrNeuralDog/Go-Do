@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Go Do — Mockup (Light / Gruvbox)</title>
+<style>
+  :root{
+    --radius: 12px;
+    --gap: 12px;
+    --font-sans: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --card-padding: 14px;
+    --shadow: 0 8px 20px rgba(16,16,16,0.08);
+  }
+
+  /* Light theme variables */
+  .theme-light {
+    --bg: #FFF9F2;
+    --header-grad-a: #FFA84B;
+    --header-grad-b: #FFD27A;
+    --panel-bg: #FFFDF9;
+    --muted: #6b6b6b;
+    --accent: #F0C23D;
+    --btn-bg: #FFD27A;
+    --card-bg: #fff;
+    --text: #222;
+    --control-bg: rgba(255,255,255,0.9);
+    --fab-bg: #FFA84B;
+    --icon-color: #222;
+    --border: rgba(0,0,0,0.06);
+  }
+
+  /* Gruvbox theme variables */
+  .theme-gruvbox {
+    --bg: #2a2723;
+    --header-grad-a: #7a4b07; /* darker gruv */
+    --header-grad-b: #493623;
+    --panel-bg: #3c3836;
+    --muted: #bdae93;
+    --accent: #d79921;
+    --btn-bg: #d79921;
+    --card-bg: #3c3836;
+    --text: #ebdbb2;
+    --control-bg: rgba(60,56,54,0.9);
+    --fab-bg: #d79921;
+    --icon-color: #ebdbb2;
+    --border: rgba(255,255,255,0.06);
+  }
+
+  html,body{
+    height:100%;
+    margin:0;
+    font-family: var(--font-sans);
+    background: var(--bg);
+    color: var(--text);
+    -webkit-font-smoothing:antialiased;
+    -moz-osx-font-smoothing:grayscale;
+  }
+
+  .app {
+    max-width: 760px;
+    margin: 18px auto;
+    padding: 18px;
+  }
+
+  /* Header (logo + gradient) */
+  .header {
+    border-radius: calc(var(--radius) + 4px);
+    padding: 28px 20px;
+    background: linear-gradient(180deg, var(--header-grad-a) 0%, var(--header-grad-b) 100%);
+    color: white;
+    box-shadow: var(--shadow);
+    display:flex;
+    align-items:center;
+    gap:16px;
+  }
+  .logo {
+    width:56px;
+    height:56px;
+    border-radius:50%;
+    background: rgba(255,255,255,0.18);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-weight:700;
+    font-size:22px;
+    color: white;
+  }
+  .title {
+    font-size:32px;
+    font-weight:700;
+    letter-spacing:0.6px;
+  }
+
+  /* Controls row */
+  .controls {
+    margin-top: 14px;
+    display:flex;
+    gap:10px;
+    align-items:center;
+  }
+
+  .select,
+  .small-btn,
+  .theme-btn {
+    height:44px;
+    border-radius:12px;
+    padding:0 14px;
+    display:inline-flex;
+    align-items:center;
+    gap:10px;
+    background: var(--control-bg);
+    color: var(--text);
+    border:1px solid var(--border);
+    cursor:pointer;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.03) inset;
+  }
+
+  /* arrow buttons */
+  .small-btn {
+    width:48px;
+    justify-content:center;
+    font-weight:700;
+  }
+
+  .theme-btn { margin-left:auto; font-weight:700; }
+
+  /* main panel (date + tasks) */
+  .panel {
+    margin-top:20px;
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    padding: var(--card-padding);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+  }
+
+  .date-row {
+    font-weight:700;
+    margin-bottom:10px;
+    color: var(--muted);
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+
+  .tasks {
+    margin-top:8px;
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+  }
+
+  .task {
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.02));
+    padding:12px;
+    border-radius:10px;
+    display:flex;
+    align-items:center;
+    gap:12px;
+    border:1px solid var(--border);
+  }
+
+  .color-square {
+    width:22px;height:28px;border-radius:6px;background:var(--accent);
+    flex:0 0 22px;
+  }
+  .check {
+    width:20px;height:20px;border-radius:4px;border:2px solid rgba(0,0,0,0.12);
+    display:inline-block;flex:0 0 20px;background:transparent;
+  }
+
+  .task-title { flex:1; color:var(--text); font-size:16px; }
+  .task-time { margin-left:8px; color:var(--muted); min-width:48px; text-align:right; }
+  .task-action { margin-left:8px; width:20px; height:20px; display:inline-flex; align-items:center; justify-content:center; }
+
+  /* Floating add button */
+  .fab {
+    position:fixed;
+    left:28px;
+    bottom:28px;
+    width:64px;height:64px;border-radius:50%;
+    background:var(--fab-bg);
+    display:flex;align-items:center;justify-content:center;
+    color:var(--icon-color);
+    font-size:34px;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.18);
+    cursor:pointer;
+    border:4px solid rgba(255,255,255,0.04);
+  }
+
+  /* small icon styles */
+  .icon {
+    width:18px;height:18px;display:inline-block;
+    line-height:1;color:var(--icon-color);
+  }
+
+  /* responsive */
+  @media (max-width:520px){
+    .app { padding:12px; }
+    .header { padding:20px 12px; }
+    .title { font-size:22px; }
+    .controls { flex-wrap:wrap; gap:8px; }
+    .theme-btn { margin-left:0; }
+    .fab { left:18px; bottom:18px; width:56px;height:56px; font-size:28px; }
+  }
+</style>
+</head>
+<body class="theme-light"> <!-- change to theme-gruvbox to preview Gruvbox -->
+  <div class="app">
+    <div class="header">
+      <div class="logo">✓</div>
+      <div class="title">Go Do</div>
+    </div>
+
+    <div class="controls">
+      <div class="select" role="button">Incomplete ▾</div>
+      <div class="small-btn" title="Prev">◀</div>
+      <div class="small-btn" title="Next">▶</div>
+      <div class="theme-btn" id="themeToggle">Gruvbox</div>
+    </div>
+
+    <div class="panel" role="region" aria-label="task-list">
+      <div class="date-row">2025/10/28 Tuesday <span style="opacity:.9;margin-left:8px;font-weight:500">+</span></div>
+
+      <div class="tasks">
+        <div class="task">
+          <div class="color-square" aria-hidden="true"></div>
+          <div class="check" aria-hidden="true"></div>
+          <div class="task-title">орнепанроен</div>
+          <div class="task-time">20:19</div>
+          <div class="task-action" title="done">✔</div>
+          <div class="task-action" title="delete" style="color:#e04b5a">✖</div>
+        </div>
+
+        <div class="task">
+          <div class="color-square" aria-hidden="true"></div>
+          <div class="check" aria-hidden="true"></div>
+          <div class="task-title">sdfsdf</div>
+          <div class="task-time">20:18</div>
+          <div class="task-action" title="star" style="color:var(--accent)">★</div>
+          <div class="task-action" title="delete" style="color:#e04b5a">✖</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="fab" title="Добавить задачу">+</div>
+
+<script>
+  // Простое переключение тем и обновление текста кнопки
+  (function(){
+    const btn = document.getElementById('themeToggle');
+    const body = document.body;
+    // начальное состояние — light (которое уже в body)
+    function setTheme(isGruv){
+      if(isGruv){
+        body.classList.remove('theme-light');
+        body.classList.add('theme-gruvbox');
+        btn.textContent = 'Light';
+      } else {
+        body.classList.remove('theme-gruvbox');
+        body.classList.add('theme-light');
+        btn.textContent = 'Gruvbox';
+      }
+    }
+    btn.addEventListener('click', function(){
+      setTheme(body.classList.contains('theme-light'));
+    });
+    // если хочешь — можно сохранять выбор в localStorage
+  })();
+</script>
+</body>
+</html>

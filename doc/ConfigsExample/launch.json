@@ -1,0 +1,48 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "CMake: Debug (MSVC)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${command:cmake.launchTargetPath}",
+            "cwd": "${command:cmake.launchTargetDirectory}",
+            "console": "integratedTerminal",
+            "stopAtEntry": false,
+            "preLaunchTask": "CMake: build",
+            "visualizerFile": "c:\\Users\\sekin-novikov\\AppData\\Roaming\\Cursor\\User\\workspaceStorage\\ca510fef83b709ffebf0cbbcbc9c747b\\tonka3000.qtvsctools\\qt.natvis.xml"
+        },
+        {
+            "name": "CMake: Debug (Qt MinGW gdb)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${command:cmake.launchTargetPath}",
+            "cwd": "${command:cmake.launchTargetDirectory}",
+            "MIMode": "gdb",
+            "miDebuggerPath": "C:/LifeApps/QtNew/Tools/mingw810_64/bin/gdb.exe",
+            "console": "integratedTerminal",
+            "environment": [
+                {
+                    "name": "PATH",
+                    "value": "C:/LifeApps/QtNew/5.15.2/mingw81_64/bin;C:/LifeApps/QtNew/Tools/mingw810_64/bin;${env:PATH}"
+                },
+                { "name": "QT_FORCE_STDERR_LOGGING", "value": "1" },
+                { "name": "QT_LOGGING_RULES", "value": "*.debug=true;qt.qpa.*=false" }
+            ],
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "externalConsole": false,
+            "stopAtEntry": false,
+            "preLaunchTask": "CMake: build",
+            "visualizerFile": "c:\\Users\\sekin-novikov\\AppData\\Roaming\\Cursor\\User\\workspaceStorage\\ca510fef83b709ffebf0cbbcbc9c747b\\tonka3000.qtvsctools\\qt.natvis.xml"
+        }
+    ]
+}
