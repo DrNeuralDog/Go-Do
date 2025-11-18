@@ -165,17 +165,17 @@ func (r *timelineRenderer) createTimelineContent() *fyne.Container {
 func (r *timelineRenderer) buildTimelineObjects() []fyne.CanvasObject {
 	var objects []fyne.CanvasObject
 
+	// Single date header for current day
+	dateKey := r.timeline.currentDate.Format("2006-01-02")
+	dateHeader := r.createDateHeader(dateKey)
+	objects = append(objects, dateHeader)
+
 	if len(r.timeline.visibleItems) == 0 {
 		emptyLabel := widget.NewLabel(localization.GetString("status_empty_list"))
 		emptyLabel.Alignment = fyne.TextAlignCenter
 		objects = append(objects, emptyLabel)
 		return objects
 	}
-
-	// Single date header for current day
-	dateKey := r.timeline.currentDate.Format("2006-01-02")
-	dateHeader := r.createDateHeader(dateKey)
-	objects = append(objects, dateHeader)
 
 	// Add todo items
 	for _, todo := range r.timeline.todos {
@@ -215,9 +215,22 @@ func (r *timelineRenderer) createDateHeader(dateKey string) fyne.CanvasObject {
 
 	// Center the date header within the tasks window
 	headerLabel.Alignment = fyne.TextAlignCenter
+
+	// Divider line separating header from tasks
+	var dividerColor color.Color
+	if _, ok := fyne.CurrentApp().Settings().Theme().(*LightSoftTheme); ok {
+		dividerColor = color.NRGBA{R: 0xD0, G: 0xD0, B: 0xD0, A: 0xFF}
+	} else {
+		dividerColor = color.NRGBA{R: 0x3c, G: 0x38, B: 0x36, A: 0xFF}
+	}
+	divider := canvas.NewRectangle(dividerColor)
+	divider.SetMinSize(fyne.NewSize(10, 1))
+
 	return container.NewVBox(
+		CreateSpacer(1, 2),
 		container.NewCenter(headerLabel),
-		CreateSpacer(1, 10),
+		CreateSpacer(1, 3),
+		divider,
 	)
 }
 

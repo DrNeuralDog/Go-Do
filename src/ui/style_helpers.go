@@ -21,6 +21,14 @@ func CreateSpacer(width float32, height float32) fyne.CanvasObject {
 	return container.NewGridWrap(fyne.NewSize(width, height), r)
 }
 
+// CreateFixedSeparator returns a horizontal line with fixed color,
+// so it remains visible and does not change when the app theme changes.
+func CreateFixedSeparator() fyne.CanvasObject {
+	rect := canvas.NewRectangle(hex("#bdae93")) // warm light line, readable on dark background
+	rect.SetMinSize(fyne.NewSize(1, 1))
+	return rect
+}
+
 // CreateChipStyle wraps the given object in a rounded, lightly tinted background
 // to create a compact "chip" appearance.
 func CreateChipStyle(obj fyne.CanvasObject) fyne.CanvasObject {
@@ -290,7 +298,8 @@ func (b *SimpleRectButton) CreateRenderer() fyne.WidgetRenderer {
 	bg.CornerRadius = b.Radius
 	txt := canvas.NewText(b.Text, toNRGBA(b.Fg))
 	txt.Alignment = fyne.TextAlignCenter
-	txt.TextStyle = fyne.TextStyle{Bold: false}
+	// Make button text bold for better emphasis
+	txt.TextStyle = fyne.TextStyle{Bold: true}
 	cont := container.NewMax(bg, container.NewCenter(txt))
 	return &simpleRectButtonRenderer{
 		button: b,
@@ -593,6 +602,118 @@ func CreateStyledSelect(selectWidget fyne.CanvasObject, bgColor color.Color, siz
 	)
 }
 
+// TinyIconButton is a minimal icon button (16x16) without padding or background for compact layouts.
+type TinyIconButton struct {
+	widget.BaseWidget
+	Icon     fyne.Resource
+	OnTapped func()
+	pressed  bool // track press state for animation
+	hovered  bool // track hover state
+}
+
+func NewTinyIconButton(icon fyne.Resource, onTap func()) *TinyIconButton {
+	b := &TinyIconButton{
+		Icon:     icon,
+		OnTapped: onTap,
+		pressed:  false,
+		hovered:  false,
+	}
+	b.ExtendBaseWidget(b)
+	return b
+}
+
+func (b *TinyIconButton) CreateRenderer() fyne.WidgetRenderer {
+	bg := canvas.NewRectangle(color.NRGBA{R: 0, G: 0, B: 0, A: 0})
+	bg.CornerRadius = 4
+	return &tinyIconButtonRenderer{
+		button: b,
+		icon:   widget.NewIcon(b.Icon),
+		bg:     bg,
+	}
+}
+
+func (b *TinyIconButton) MinSize() fyne.Size {
+	return fyne.NewSize(16, 16)
+}
+
+func (b *TinyIconButton) Tapped(*fyne.PointEvent) {
+	// Trigger press animation
+	b.pressed = true
+	b.Refresh()
+
+	// Execute callback
+	if b.OnTapped != nil {
+		b.OnTapped()
+	}
+
+	// Animate back to normal after 120ms
+	go func() {
+		time.Sleep(120 * time.Millisecond)
+		b.pressed = false
+		b.Refresh()
+	}()
+}
+
+func (b *TinyIconButton) MouseIn(*desktop.MouseEvent) {
+	b.hovered = true
+	b.Refresh()
+}
+
+func (b *TinyIconButton) MouseMoved(*desktop.MouseEvent) {
+	// Keep hovered state while mouse is in
+}
+
+func (b *TinyIconButton) MouseOut() {
+	b.hovered = false
+	b.Refresh()
+}
+
+// tinyIconButtonRenderer renders a TinyIconButton with visual feedback
+type tinyIconButtonRenderer struct {
+	button *TinyIconButton
+	icon   *widget.Icon
+	bg     *canvas.Rectangle
+}
+
+func (r *tinyIconButtonRenderer) Layout(size fyne.Size) {
+	r.bg.Resize(size)
+	r.bg.Move(fyne.NewPos(0, 0))
+	r.icon.Resize(size)
+	r.icon.Move(fyne.NewPos(0, 0))
+}
+
+func (r *tinyIconButtonRenderer) MinSize() fyne.Size {
+	return r.button.MinSize()
+}
+
+func (r *tinyIconButtonRenderer) Refresh() {
+	// Adjust background color based on state for visual feedback
+	if r.button.pressed {
+		// Darken when pressed - use a dark semi-transparent background
+		r.bg.FillColor = color.NRGBA{R: 100, G: 100, B: 100, A: 80}
+	} else if r.button.hovered {
+		// Brighten when hovered - use a light semi-transparent background
+		r.bg.FillColor = color.NRGBA{R: 200, G: 200, B: 200, A: 60}
+	} else {
+		// Normal state - transparent
+		r.bg.FillColor = color.NRGBA{R: 0, G: 0, B: 0, A: 0}
+	}
+	r.bg.Refresh()
+	r.icon.Refresh()
+}
+
+func (r *tinyIconButtonRenderer) Objects() []fyne.CanvasObject {
+	return []fyne.CanvasObject{r.bg, r.icon}
+}
+
+func (r *tinyIconButtonRenderer) Destroy() {
+	// Cleanup if needed
+}
+
+func (r *tinyIconButtonRenderer) BackgroundColor() fyne.ThemeColorName {
+	return ""
+}
+
 // CreateTasksContainer wraps timeline in a rounded container with theme-specific bg.
 func CreateTasksContainer(content fyne.CanvasObject) fyne.CanvasObject {
 	bgColor := theme.Color(theme.ColorNameInputBackground)
@@ -672,8 +793,8 @@ func (ns *NumberSpinner) SetValue(v int) {
 }
 
 func (ns *NumberSpinner) MinSize() fyne.Size {
-	// Increased to ensure arrow buttons have enough space and do not overlap
-	return fyne.NewSize(160, 48)
+	// увеличили высоту примерно на 10% (32 -> 35)
+	return fyne.NewSize(160, 35)
 }
 
 func (ns *NumberSpinner) CreateRenderer() fyne.WidgetRenderer {
@@ -686,24 +807,73 @@ func (ns *NumberSpinner) CreateRenderer() fyne.WidgetRenderer {
 	bg.StrokeColor = sep
 	bg.StrokeWidth = 1
 
-	// display value text
+	// display value text - STORE THIS IN RENDERER
 	txt := canvas.NewText(fmt.Sprintf("%d", ns.Value), toNRGBA(ns.TextColor))
 	txt.TextSize = 16
 	txt.Alignment = fyne.TextAlignLeading
 
-	// up/down buttons (icon-based, fixed-size to prevent layout shifts)
-	upBtn := widget.NewButtonWithIcon("", ArrowUpIcon, func() { ns.increment() })
-	downBtn := widget.NewButtonWithIcon("", ArrowDownIcon, func() { ns.decrement() })
+	// up/down buttons (compact 16x16 icons, wrapped to 24x24 each for total 48px height)
+	// Use Center to vertically align arrows in the middle
+	upBtn := NewTinyIconButton(ArrowUpIcon, func() { ns.increment() })
+	downBtn := NewTinyIconButton(ArrowDownIcon, func() { ns.decrement() })
 	upDown := container.NewVBox(
-		container.NewGridWrap(fyne.NewSize(32, 24), upBtn),
-		container.NewGridWrap(fyne.NewSize(32, 24), downBtn),
+		container.NewCenter(upBtn),
+		container.NewCenter(downBtn),
 	)
 
 	// left padding for text
 	textPadded := container.NewBorder(nil, nil, CreateSpacer(12, 1), nil, container.NewCenter(txt))
 
 	content := container.NewBorder(nil, nil, nil, upDown, textPadded)
-	return widget.NewSimpleRenderer(container.NewStack(bg, content))
+	stack := container.NewStack(bg, content)
+
+	// Return custom renderer that can update text
+	return &numberSpinnerRenderer{
+		spinner: ns,
+		bg:      bg,
+		txt:     txt,
+		upBtn:   upBtn,
+		downBtn: downBtn,
+		stack:   stack,
+	}
+}
+
+// numberSpinnerRenderer is a custom renderer that properly updates text on value change
+type numberSpinnerRenderer struct {
+	spinner *NumberSpinner
+	bg      *canvas.Rectangle
+	txt     *canvas.Text
+	upBtn   *TinyIconButton
+	downBtn *TinyIconButton
+	stack   *fyne.Container
+}
+
+func (r *numberSpinnerRenderer) Layout(size fyne.Size) {
+	r.stack.Resize(size)
+}
+
+func (r *numberSpinnerRenderer) MinSize() fyne.Size {
+	return r.spinner.MinSize()
+}
+
+func (r *numberSpinnerRenderer) Refresh() {
+	// Update text display with current value
+	r.txt.Text = fmt.Sprintf("%d", r.spinner.Value)
+	r.txt.Refresh()
+	r.bg.Refresh()
+	r.stack.Refresh()
+}
+
+func (r *numberSpinnerRenderer) Objects() []fyne.CanvasObject {
+	return []fyne.CanvasObject{r.stack}
+}
+
+func (r *numberSpinnerRenderer) Destroy() {
+	// Cleanup if needed
+}
+
+func (r *numberSpinnerRenderer) BackgroundColor() fyne.ThemeColorName {
+	return ""
 }
 
 // Tapped opens a small dialog to allow manual numeric input
