@@ -12,7 +12,9 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/driver/desktop"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
@@ -25,6 +27,7 @@ type Timeline struct {
 	currentDate time.Time // Changed to time.Time for daily view
 	todos       []*models.TodoItem
 	viewMode    models.ViewMode
+	window      fyne.Window
 
 	// Timeline state
 	scrollPosition float32
@@ -36,6 +39,7 @@ type Timeline struct {
 	onTodoSelected    func(*models.TodoItem, time.Time)
 	onTodoReorder     func(*models.TodoItem, int) // delta: -1 up, +1 down
 	onReorderFinished func()
+	onTodosChanged    func()
 
 	// drag state
 	draggingTodo *models.TodoItem
@@ -76,9 +80,19 @@ func (t *Timeline) SetTodos(todos []*models.TodoItem) {
 	// Don't auto-refresh - let caller control when to refresh
 }
 
+// SetWindow sets the parent window reference for dialogs.
+func (t *Timeline) SetWindow(win fyne.Window) {
+	t.window = win
+}
+
 // SetOnTodoReorder sets callback for explicit reorder actions (up/down or DnD)
 func (t *Timeline) SetOnTodoReorder(callback func(*models.TodoItem, int)) {
 	t.onTodoReorder = callback
+}
+
+// SetOnTodosChanged registers callback invoked when timeline mutates todo data.
+func (t *Timeline) SetOnTodosChanged(callback func()) {
+	t.onTodosChanged = callback
 }
 
 // organizeByDate groups todos by date for display
@@ -276,21 +290,27 @@ func (r *timelineRenderer) createTodoItem(todo *models.TodoItem) fyne.CanvasObje
 		if toggleStar {
 			updated := *todo
 			updated.Starred = !todo.Starred
-			_ = r.timeline.dataManager.UpdateTodo(&updated, todo.TodoTime)
-			if todos, err := r.timeline.dataManager.GetTodosForMonth(r.timeline.currentDate.Year(), int(r.timeline.currentDate.Month())); err == nil {
-				filtered := r.timeline.viewMode.FilterItems(todos, time.Now())
-				r.timeline.SetTodos(filtered)
-				r.timeline.Refresh()
+			if err := r.timeline.dataManager.UpdateTodo(&updated, todo.TodoTime); err != nil {
+				r.timeline.showError(err)
+				return
 			}
+			r.timeline.notifyTodosChanged()
 		}
 	})
 	// Push star down to center it vertically in the row
 	statusCentered := container.NewVBox(CreateSpacer(1, 7), status)
 
+	// Delete action: show trash icon right of status
+	deleteBtn := widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {
+		r.timeline.confirmDelete(todo)
+	})
+	deleteBtn.Importance = widget.LowImportance
+	deleteBtnCentered := container.NewVBox(CreateSpacer(1, 7), container.NewCenter(deleteBtn))
+
 	// Layout: [ColorSquare] [Spacer] [Checkbox] [Name................] [Time] [Star] [Delete]
 	// Add spacer between color and checkbox (doubled spacing)
 	leftSection := container.NewHBox(colorSquareWrap, CreateSpacer(8, 1), doneCheckCentered)
-	rightSection := container.NewHBox(timeLabel, CreateSpacer(8, 1), statusCentered)
+	rightSection := container.NewHBox(timeLabel, CreateSpacer(8, 1), statusCentered, CreateSpacer(4, 1), deleteBtnCentered)
 	content := container.NewBorder(nil, nil, leftSection, rightSection, nameLabel)
 
 	// Row with bottom border only (no card)
@@ -307,16 +327,38 @@ func (r *timelineRenderer) createTodoItem(todo *models.TodoItem) fyne.CanvasObje
 		bottomLine,
 	)
 
-	// press/drag overlay for row feedback
-	pressOverlay := canvas.NewRectangle(color.NRGBA{R: 0, G: 0, B: 0, A: 0})
-	pressOverlay.CornerRadius = 0
-	pressStack := container.NewMax(row, pressOverlay)
+	// Shadow layer (hidden by default, shown during drag)
+	shadowRect := canvas.NewRectangle(color.NRGBA{R: 0, G: 0, B: 0, A: 0})
+	shadowRect.CornerRadius = 4
 
-	// If this is the currently dragged item - keep it highlighted during drag
-	if r.timeline.draggingTodo == todo {
-		// Slight blue tint with high transparency (~20% opacity)
-		pressOverlay.FillColor = color.NRGBA{R: 0x3C, G: 0x82, B: 0xFF, A: 50}
+	// Border layer (hidden by default, shown during drag)
+	borderRect := canvas.NewRectangle(color.NRGBA{R: 0, G: 0, B: 0, A: 0})
+	borderRect.CornerRadius = 4
+
+	// Press/drag overlay for row feedback
+	pressOverlay := canvas.NewRectangle(color.NRGBA{R: 0, G: 0, B: 0, A: 0})
+	pressOverlay.CornerRadius = 4
+
+	// Stack all layers: shadow (bottom) -> border -> row -> press overlay (top)
+	pressStack := container.NewMax(shadowRect, borderRect, row, pressOverlay)
+
+	// If this is the currently dragged item - apply drag effects
+	isDragging := r.timeline.draggingTodo == todo
+	if isDragging {
+		// Enhanced highlight with higher opacity and border
+		pressOverlay.FillColor = color.NRGBA{R: 0x3C, G: 0x82, B: 0xFF, A: 80}
+
+		// Border effect - blue outline
+		borderRect.FillColor = color.Transparent
+		borderRect.StrokeColor = color.NRGBA{R: 0x3C, G: 0x82, B: 0xFF, A: 200}
+		borderRect.StrokeWidth = 2
+
+		// Shadow effect - dark gradient
+		shadowRect.FillColor = color.NRGBA{R: 0, G: 0, B: 0, A: 30}
+
 		pressOverlay.Refresh()
+		borderRect.Refresh()
+		shadowRect.Refresh()
 	}
 
 	// Make the entire item clickable
@@ -325,6 +367,8 @@ func (r *timelineRenderer) createTodoItem(todo *models.TodoItem) fyne.CanvasObje
 		todoTime:     todo.TodoTime,
 		container:    pressStack,
 		press:        pressOverlay,
+		shadow:       shadowRect,
+		border:       borderRect,
 		onSelected:   r.timeline.onTodoSelected,
 		onReorder:    r.timeline.onTodoReorder,
 		rowThresh:    60,
@@ -343,6 +387,9 @@ type tappableTodo struct {
 	todoTime     time.Time
 	container    *fyne.Container
 	press        *canvas.Rectangle
+	shadow       *canvas.Rectangle // Shadow effect during drag
+	border       *canvas.Rectangle // Border effect during drag
+	originalSize fyne.Size         // Original size before scaling
 	onSelected   func(*models.TodoItem, time.Time)
 	onReorder    func(*models.TodoItem, int)
 	onReorderEnd func()
@@ -373,8 +420,10 @@ func (tt *tappableTodo) Tapped(*fyne.PointEvent) {
 		tt.press.Refresh()
 		go func(p *canvas.Rectangle) {
 			time.Sleep(120 * time.Millisecond)
-			p.FillColor = color.NRGBA{R: 0, G: 0, B: 0, A: 0}
-			p.Refresh()
+			runOnMainThread(func() {
+				p.FillColor = color.NRGBA{R: 0, G: 0, B: 0, A: 0}
+				p.Refresh()
+			})
 		}(tt.press)
 	}
 	if tt.onSelected != nil {
@@ -384,15 +433,43 @@ func (tt *tappableTodo) Tapped(*fyne.PointEvent) {
 
 // Implement fyne.Draggable
 func (tt *tappableTodo) Dragged(e *fyne.DragEvent) {
+	// Mark as dragging and apply visual effects on first drag event
+	if !tt.dragging {
+		tt.dragging = true
+
+		// Enhanced highlight with higher opacity (80 instead of 50)
+		if tt.press != nil {
+			tt.press.FillColor = color.NRGBA{R: 0x3C, G: 0x82, B: 0xFF, A: 80}
+			tt.press.Refresh()
+		}
+
+		// Border effect - blue outline
+		if tt.border != nil {
+			tt.border.FillColor = color.Transparent
+			tt.border.StrokeColor = color.NRGBA{R: 0x3C, G: 0x82, B: 0xFF, A: 200}
+			tt.border.StrokeWidth = 2
+			tt.border.Refresh()
+		}
+
+		// Shadow effect - dark semi-transparent
+		if tt.shadow != nil {
+			tt.shadow.FillColor = color.NRGBA{R: 0, G: 0, B: 0, A: 30}
+			tt.shadow.Refresh()
+		}
+
+		if tt.timeline != nil {
+			tt.timeline.draggingTodo = tt.todo
+		}
+	}
+
+	// Process drag movement
 	tt.dragAccumY += e.Dragged.DY
-	// Move downwards
 	for tt.dragAccumY > tt.rowThresh {
 		if tt.onReorder != nil {
 			tt.onReorder(tt.todo, 1)
 		}
 		tt.dragAccumY -= tt.rowThresh
 	}
-	// Move upwards
 	for tt.dragAccumY < -tt.rowThresh {
 		if tt.onReorder != nil {
 			tt.onReorder(tt.todo, -1)
@@ -401,8 +478,169 @@ func (tt *tappableTodo) Dragged(e *fyne.DragEvent) {
 	}
 }
 
+func (t *Timeline) confirmDelete(todo *models.TodoItem) {
+	if todo == nil {
+		return
+	}
+	if t.window == nil {
+		t.deleteTodo(todo)
+		return
+	}
+
+	var restoreTheme func()
+	currentTheme := fyne.CurrentApp().Settings().Theme()
+	messageColor := toNRGBA(theme.Color(theme.ColorNameForeground))
+	overrideTheme := &foregroundOverrideTheme{
+		base:         currentTheme,
+		headingDelta: 5,
+		textDelta:    5,
+	}
+	if _, ok := currentTheme.(*LightSoftTheme); ok {
+		messageColor = color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0xFF}
+		overrideTheme.overrideForeground = true
+		overrideTheme.overrideColor = messageColor
+	}
+	fyne.CurrentApp().Settings().SetTheme(overrideTheme)
+	restoreTheme = func() {
+		fyne.CurrentApp().Settings().SetTheme(currentTheme)
+	}
+	message := canvas.NewText(localization.GetString("confirm_delete_message"), messageColor)
+	message.Alignment = fyne.TextAlignLeading
+	message.TextSize = 16
+	content := container.NewVBox(
+		container.NewHBox(message, layout.NewSpacer()),
+		CreateSpacer(1, 20),
+	)
+	conf := dialog.NewCustomConfirm(
+		localization.GetString("confirm_delete_title"),
+		localization.GetString("shortcut_delete"),
+		localization.GetString("form_button_cancel"),
+		content,
+		func(confirm bool) {
+			if confirm {
+				t.deleteTodo(todo)
+			}
+		},
+		t.window,
+	)
+	conf.SetOnClosed(func() {
+		if restoreTheme != nil {
+			restoreTheme()
+		}
+	})
+	conf.Show()
+}
+
+func (t *Timeline) deleteTodo(todo *models.TodoItem) {
+	if todo == nil {
+		return
+	}
+	if err := t.dataManager.RemoveTodo(todo.TodoTime); err != nil {
+		t.showError(err)
+		return
+	}
+	t.notifyTodosChanged()
+}
+
+func (t *Timeline) notifyTodosChanged() {
+	if t.onTodosChanged != nil {
+		t.onTodosChanged()
+		return
+	}
+	t.reloadVisibleTodos()
+}
+
+func (t *Timeline) reloadVisibleTodos() {
+	year, month := t.currentDate.Year(), int(t.currentDate.Month())
+	todos, err := t.dataManager.GetTodosForMonth(year, month)
+	if err != nil {
+		t.showError(err)
+		return
+	}
+	filtered := t.viewMode.FilterItems(todos, time.Now())
+	t.SetTodos(filtered)
+	t.Refresh()
+}
+
+func (t *Timeline) showError(err error) {
+	if err == nil {
+		return
+	}
+	if t.window != nil {
+		dialog.NewError(err, t.window).Show()
+		return
+	}
+	fmt.Println("timeline error:", err)
+}
+
+type foregroundOverrideTheme struct {
+	base              fyne.Theme
+	overrideColor     color.Color
+	overrideForeground bool
+	headingDelta      float32
+	textDelta         float32
+}
+
+func (t *foregroundOverrideTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) color.Color {
+	if name == theme.ColorNameForeground && t.overrideForeground {
+		return t.overrideColor
+	}
+	if t.base != nil {
+		return t.base.Color(name, variant)
+	}
+	return theme.DefaultTheme().Color(name, variant)
+}
+
+func (t *foregroundOverrideTheme) Font(style fyne.TextStyle) fyne.Resource {
+	if t.base != nil {
+		return t.base.Font(style)
+	}
+	return theme.DefaultTheme().Font(style)
+}
+
+func (t *foregroundOverrideTheme) Icon(name fyne.ThemeIconName) fyne.Resource {
+	if t.base != nil {
+		return t.base.Icon(name)
+	}
+	return theme.DefaultTheme().Icon(name)
+}
+
+func (t *foregroundOverrideTheme) Size(name fyne.ThemeSizeName) float32 {
+	var size float32
+	if t.base != nil {
+		size = t.base.Size(name)
+	} else {
+		size = theme.DefaultTheme().Size(name)
+	}
+	if name == theme.SizeNameHeadingText {
+		size += t.headingDelta
+	}
+	if name == theme.SizeNameText {
+		size += t.textDelta
+	}
+	return size
+}
+
 func (tt *tappableTodo) DragEnd() {
+	tt.dragging = false
 	tt.dragAccumY = 0
+
+	// Clear all drag visual effects
+	if tt.press != nil {
+		tt.press.FillColor = color.NRGBA{R: 0, G: 0, B: 0, A: 0}
+		tt.press.Refresh()
+	}
+	if tt.border != nil {
+		tt.border.FillColor = color.NRGBA{R: 0, G: 0, B: 0, A: 0}
+		tt.border.StrokeColor = color.NRGBA{R: 0, G: 0, B: 0, A: 0}
+		tt.border.StrokeWidth = 0
+		tt.border.Refresh()
+	}
+	if tt.shadow != nil {
+		tt.shadow.FillColor = color.NRGBA{R: 0, G: 0, B: 0, A: 0}
+		tt.shadow.Refresh()
+	}
+
 	if tt.onReorderEnd != nil {
 		tt.onReorderEnd()
 	}
@@ -410,11 +648,6 @@ func (tt *tappableTodo) DragEnd() {
 		tt.timeline.draggingTodo = nil
 		// Force rebuild so any drag highlight applied during re-render is cleared
 		tt.timeline.Refresh()
-	}
-	// Ensure highlight is cleared even if MouseUp was not delivered
-	if tt.press != nil {
-		tt.press.FillColor = color.NRGBA{R: 0, G: 0, B: 0, A: 0}
-		tt.press.Refresh()
 	}
 }
 
@@ -457,13 +690,25 @@ func (tt *tappableTodo) MouseMoved(e *desktop.MouseEvent) {
 func (tt *tappableTodo) MouseUp(*desktop.MouseEvent) {
 	tt.dragging = false
 	tt.dragAccumY = 0
-	if tt.onReorderEnd != nil {
-		tt.onReorderEnd()
-	}
-	// Remove highlight
+
+	// Clear all drag visual effects
 	if tt.press != nil {
 		tt.press.FillColor = color.NRGBA{R: 0, G: 0, B: 0, A: 0}
 		tt.press.Refresh()
+	}
+	if tt.border != nil {
+		tt.border.FillColor = color.NRGBA{R: 0, G: 0, B: 0, A: 0}
+		tt.border.StrokeColor = color.NRGBA{R: 0, G: 0, B: 0, A: 0}
+		tt.border.StrokeWidth = 0
+		tt.border.Refresh()
+	}
+	if tt.shadow != nil {
+		tt.shadow.FillColor = color.NRGBA{R: 0, G: 0, B: 0, A: 0}
+		tt.shadow.Refresh()
+	}
+
+	if tt.onReorderEnd != nil {
+		tt.onReorderEnd()
 	}
 	if tt.timeline != nil {
 		tt.timeline.draggingTodo = nil

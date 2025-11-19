@@ -69,10 +69,15 @@ func NewMainWindow(window fyne.Window, dataDir string) *MainWindow {
 
 	// Initialize timeline
 	mw.timeline = NewTimeline(mw.dataManager)
+	mw.timeline.SetWindow(window)
 	mw.timeline.SetOnTodoSelected(mw.onTodoSelected)
 	// Reorder callback from timeline (manual up/down or DnD)
 	mw.timeline.SetOnTodoReorder(mw.onTodoReorder)
 	mw.timeline.SetOnReorderFinished(mw.onReorderFinished)
+	mw.timeline.SetOnTodosChanged(func() {
+		mw.loadTodos()
+		mw.refreshView()
+	})
 
 	mw.setupUI()
 	mw.loadTodos()
@@ -479,10 +484,12 @@ func (mw *MainWindow) onTodoReorder(todo *models.TodoItem, delta int) {
 		return a.TodoTime.After(b.TodoTime)
 	})
 
-	// Find index of the item
+	// Find index of the item using pointer comparison for exact match
+	// This ensures we find the exact same instance even if Order was already modified
 	idx := -1
 	for i, t := range dayTodos {
-		if t.TodoTime.Equal(todo.TodoTime) && t.Name == todo.Name {
+		// Compare by pointer if possible, otherwise fallback to time+name
+		if t == todo || (t.TodoTime.Equal(todo.TodoTime) && t.Name == todo.Name) {
 			idx = i
 			break
 		}
@@ -514,6 +521,20 @@ func (mw *MainWindow) onTodoReorder(todo *models.TodoItem, delta int) {
 	// Reassign Order sequentially starting at 1
 	for i, t := range dayTodos {
 		t.Order = i + 1
+	}
+
+	// Synchronize Order values to visible todos list
+	// This ensures mw.todos reflects the new order even if it's a filtered subset
+	orderMap := make(map[string]int) // key: "time+name"
+	for _, t := range dayTodos {
+		key := fmt.Sprintf("%v|%s", t.TodoTime.Unix(), t.Name)
+		orderMap[key] = t.Order
+	}
+	for _, t := range mw.todos {
+		key := fmt.Sprintf("%v|%s", t.TodoTime.Unix(), t.Name)
+		if order, ok := orderMap[key]; ok {
+			t.Order = order
+		}
 	}
 
 	// Immediate UI update without disk IO: reorder visible list by new Orders
