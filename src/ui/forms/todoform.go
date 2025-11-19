@@ -7,9 +7,9 @@ import (
 	"math"
 	"time"
 
-	"todo-list-migration/src/localization"
-	"todo-list-migration/src/models"
-	"todo-list-migration/src/persistence"
+	"godo/src/localization"
+	"godo/src/models"
+	"godo/src/persistence"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -22,8 +22,9 @@ import (
 
 // TodoForm represents a form for creating/editing todo items
 type TodoForm struct {
-	window      fyne.Window
-	dataManager *persistence.MonthlyManager
+	parentWindow fyne.Window // Main application window (for dialogs)
+	formWindow   fyne.Window // Current form window (for standalone windows)
+	dataManager  *persistence.MonthlyManager
 
 	// Form fields
 	nameEntry      *widget.Entry
@@ -56,9 +57,9 @@ type TodoForm struct {
 // NewTodoForm creates a new todo form dialog
 func NewTodoForm(window fyne.Window, dataManager *persistence.MonthlyManager) *TodoForm {
 	tf := &TodoForm{
-		window:      window,
-		dataManager: dataManager,
-		isEditMode:  false,
+		parentWindow: window,
+		dataManager:  dataManager,
+		isEditMode:   false,
 	}
 
 	tf.setupForm()
@@ -100,7 +101,7 @@ func (tf *TodoForm) ShowCreateDialog(onSave func()) {
 		if submitted {
 			tf.onSubmit()
 		}
-	}, tf.window)
+	}, tf.parentWindow)
 	// Make the Add dialog wider so the Date/Time row has enough space
 	dialog.Resize(fyne.NewSize(700, 600))
 	tf.currentDialog = dialog
@@ -139,7 +140,7 @@ func (tf *TodoForm) ShowEditDialog(todo *models.TodoItem, originalTime time.Time
 		if submitted {
 			tf.onSubmit()
 		}
-	}, tf.window)
+	}, tf.parentWindow)
 	// Keep edit dialog consistent with add dialog width
 	dialog.Resize(fyne.NewSize(700, 600))
 	tf.currentDialog = dialog
@@ -147,18 +148,17 @@ func (tf *TodoForm) ShowEditDialog(todo *models.TodoItem, originalTime time.Time
 }
 
 // ShowCreateWindow opens the form in a standalone window for creating a new todo
-func (tf *TodoForm) ShowCreateWindow(onSave func()) {
+func (tf *TodoForm) ShowCreateWindow(onSave func(), onWindowCreated func(fyne.Window), onWindowClosed func()) {
 	tf.isEditMode = false
 	tf.onSaveCallback = onSave
 	tf.resetForm()
 
 	title := localization.GetString("form_title_add")
 
-	// Compute window size based on main window
-	parent := tf.window
+	// Compute window size based on main window (always use parentWindow, not old formWindow)
 	parentSize := fyne.NewSize(700, 600)
-	if parent != nil && parent.Canvas() != nil {
-		parentSize = parent.Canvas().Size()
+	if tf.parentWindow != nil && tf.parentWindow.Canvas() != nil {
+		parentSize = tf.parentWindow.Canvas().Size()
 	}
 	targetW := parentSize.Width - 40
 	if targetW < 200 {
@@ -168,7 +168,17 @@ func (tf *TodoForm) ShowCreateWindow(onSave func()) {
 	targetH := parentSize.Height * 0.45
 
 	win := fyne.CurrentApp().NewWindow(title)
-	tf.window = win
+	tf.formWindow = win
+
+	// Set close callback to notify parent
+	if onWindowClosed != nil {
+		win.SetOnClosed(onWindowClosed)
+	}
+
+	// Notify parent that window was created
+	if onWindowCreated != nil {
+		onWindowCreated(win)
+	}
 
 	// Build custom form content with styled labels
 	rows := []fyne.CanvasObject{
@@ -194,7 +204,7 @@ func (tf *TodoForm) ShowCreateWindow(onSave func()) {
 	// Buttons
 	addBtn := tf.makePrimaryButton(localization.GetString("form_button_add"), func() {
 		if err := tf.trySubmit(); err != nil {
-			dialog.ShowError(err, tf.window)
+			dialog.ShowError(err, tf.formWindow)
 			return
 		}
 		if tf.onSaveCallback != nil {
@@ -206,8 +216,8 @@ func (tf *TodoForm) ShowCreateWindow(onSave func()) {
 
 	// Center buttons and set order: Cancel (left), Add (right)
 	buttonRow := container.NewCenter(container.NewHBox(cancelBtn, addBtn))
-	// Extra space between Reminder text and buttons
-	bottomWithSpacer := container.NewVBox(newVSpacer(30), buttonRow)
+	// Extra space between Reminder text and buttons, and 7px margin at the bottom
+	bottomWithSpacer := container.NewVBox(newVSpacer(30), buttonRow, newVSpacer(5))
 	// Wrap form in padding and add a bit of top margin so fields are not glued to the window edges
 	paddedForm := container.NewPadded(formBox)
 	content := container.NewBorder(newVSpacer(10), bottomWithSpacer, nil, nil, paddedForm)
@@ -218,7 +228,7 @@ func (tf *TodoForm) ShowCreateWindow(onSave func()) {
 }
 
 // ShowEditWindow opens the form in a standalone window for editing an existing todo
-func (tf *TodoForm) ShowEditWindow(todo *models.TodoItem, originalTime time.Time, onSave func()) {
+func (tf *TodoForm) ShowEditWindow(todo *models.TodoItem, originalTime time.Time, onSave func(), onWindowCreated func(fyne.Window), onWindowClosed func()) {
 	tf.isEditMode = true
 	tf.originalTodo = todo
 	tf.originalTime = originalTime
@@ -227,11 +237,10 @@ func (tf *TodoForm) ShowEditWindow(todo *models.TodoItem, originalTime time.Time
 
 	title := localization.GetString("form_title_edit")
 
-	// Compute window size based on main window
-	parent := tf.window
+	// Compute window size based on main window (always use parentWindow, not old formWindow)
 	parentSize := fyne.NewSize(700, 600)
-	if parent != nil && parent.Canvas() != nil {
-		parentSize = parent.Canvas().Size()
+	if tf.parentWindow != nil && tf.parentWindow.Canvas() != nil {
+		parentSize = tf.parentWindow.Canvas().Size()
 	}
 	targetW := parentSize.Width - 40
 	if targetW < 200 {
@@ -241,7 +250,17 @@ func (tf *TodoForm) ShowEditWindow(todo *models.TodoItem, originalTime time.Time
 	targetH := parentSize.Height * 0.45
 
 	win := fyne.CurrentApp().NewWindow(title)
-	tf.window = win
+	tf.formWindow = win
+
+	// Set close callback to notify parent
+	if onWindowClosed != nil {
+		win.SetOnClosed(onWindowClosed)
+	}
+
+	// Notify parent that window was created
+	if onWindowCreated != nil {
+		onWindowCreated(win)
+	}
 
 	// Build custom form content with styled labels
 	rows := []fyne.CanvasObject{
@@ -267,7 +286,7 @@ func (tf *TodoForm) ShowEditWindow(todo *models.TodoItem, originalTime time.Time
 	// Buttons
 	saveBtn := tf.makePrimaryButton(localization.GetString("form_button_save"), func() {
 		if err := tf.trySubmit(); err != nil {
-			dialog.ShowError(err, tf.window)
+			dialog.ShowError(err, tf.formWindow)
 			return
 		}
 		if tf.onSaveCallback != nil {
@@ -279,7 +298,8 @@ func (tf *TodoForm) ShowEditWindow(todo *models.TodoItem, originalTime time.Time
 
 	// Center buttons and set order: Cancel (left), Save (right)
 	buttonRow := container.NewCenter(container.NewHBox(cancelBtn, saveBtn))
-	bottomWithSpacer := container.NewVBox(newVSpacer(30), buttonRow)
+	// Extra space between Reminder text and buttons, and 7px margin at the bottom
+	bottomWithSpacer := container.NewVBox(newVSpacer(30), buttonRow, newVSpacer(7))
 	// Wrap form in padding and add a bit of top margin so fields are not glued to the window edges
 	paddedForm := container.NewPadded(formBox)
 	content := container.NewBorder(newVSpacer(10), bottomWithSpacer, nil, nil, paddedForm)
@@ -440,7 +460,7 @@ func (tf *TodoForm) onWarnTimeChanged(value float64) {
 // onSubmit handles form submission
 func (tf *TodoForm) onSubmit() {
 	if err := tf.trySubmit(); err != nil {
-		dialog.ShowError(err, tf.window)
+		dialog.ShowError(err, tf.parentWindow)
 		return
 	}
 	if tf.onSaveCallback != nil {
@@ -542,9 +562,9 @@ func (tf *TodoForm) reminderLabelColor() color.Color {
 // with a flat line and a clearly visible knob that adapts to the theme.
 type ReminderSlider struct {
 	widget.BaseWidget
-	Min, Max float64
-	Value    float64
-	Step     float64
+	Min, Max  float64
+	Value     float64
+	Step      float64
 	OnChanged func(float64)
 }
 
@@ -835,7 +855,12 @@ func (tf *TodoForm) showDateTimePicker() {
 	formContainer := container.NewVBox(form)
 
 	// Remove bottom buttons by using custom dialog without buttons
-	dateTimeDialog := dialog.NewCustomWithoutButtons("Select Date and Time", formContainer, tf.window)
+	// Use formWindow if available (standalone mode), otherwise use parentWindow (dialog mode)
+	dialogParent := tf.formWindow
+	if dialogParent == nil {
+		dialogParent = tf.parentWindow
+	}
+	dateTimeDialog := dialog.NewCustomWithoutButtons("Select Date and Time", formContainer, dialogParent)
 	// Make the dialog wider and compact in height to avoid extra space
 	dateTimeDialog.Resize(fyne.NewSize(700, form.MinSize().Height+40))
 
@@ -889,4 +914,3 @@ func joinStrings(strings []string, separator string) string {
 	}
 	return result
 }
-

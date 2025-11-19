@@ -6,8 +6,8 @@ import (
 	"sort"
 	"time"
 
-	"todo-list-migration/src/models"
-	"todo-list-migration/src/utils"
+	"godo/src/models"
+	"godo/src/utils"
 )
 
 // MonthlyManager handles monthly organization of todo data

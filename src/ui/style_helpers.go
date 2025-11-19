@@ -117,8 +117,10 @@ func (r *roundIconButtonRenderer) Refresh() {
 		bg = lighten(bg, 0.12)
 	}
 	r.circle.FillColor = bg
-	r.circle.Refresh()
-	r.icon.Refresh()
+	runOnMainThread(func() {
+		r.circle.Refresh()
+		r.icon.Refresh()
+	})
 }
 
 func (b *RoundIconButton) MinSize() fyne.Size {
@@ -130,7 +132,9 @@ func (b *RoundIconButton) Tapped(*fyne.PointEvent) {
 	// quick press flash by darkening background briefly
 	orig := toNRGBA(b.Bg)
 	b.Bg = darken(orig, 0.85)
-	b.Refresh()
+	runOnMainThread(func() {
+		b.Refresh()
+	})
 	go func() {
 		time.Sleep(120 * time.Millisecond)
 		runOnMainThread(func() {
@@ -144,9 +148,15 @@ func (b *RoundIconButton) Tapped(*fyne.PointEvent) {
 }
 
 // Hover handling (desktop only)
-func (b *RoundIconButton) MouseIn(*desktop.MouseEvent)    { b.hovered = true; b.Refresh() }
+func (b *RoundIconButton) MouseIn(*desktop.MouseEvent) {
+	b.hovered = true
+	runOnMainThread(func() { b.Refresh() })
+}
 func (b *RoundIconButton) MouseMoved(*desktop.MouseEvent) {}
-func (b *RoundIconButton) MouseOut()                      { b.hovered = false; b.Refresh() }
+func (b *RoundIconButton) MouseOut() {
+	b.hovered = false
+	runOnMainThread(func() { b.Refresh() })
+}
 
 // toNRGBA converts any color.Color to color.NRGBA for manipulation.
 func toNRGBA(c color.Color) color.NRGBA {
@@ -342,8 +352,10 @@ func (r *simpleRectButtonRenderer) Refresh() {
 	r.bg.FillColor = bgCol
 	r.text.Color = fgCol
 	r.text.Text = btn.Text
-	r.text.Refresh()
-	r.bg.Refresh()
+	runOnMainThread(func() {
+		r.text.Refresh()
+		r.bg.Refresh()
+	})
 }
 
 func (r *simpleRectButtonRenderer) BackgroundColor() fyne.ThemeColorName {
@@ -370,7 +382,9 @@ func (b *SimpleRectButton) Tapped(*fyne.PointEvent) {
 	// flash background on press
 	orig := toNRGBA(b.Bg)
 	b.Bg = darken(orig, 0.85)
-	b.Refresh()
+	runOnMainThread(func() {
+		b.Refresh()
+	})
 	go func() {
 		time.Sleep(120 * time.Millisecond)
 		runOnMainThread(func() {
@@ -385,7 +399,9 @@ func (b *SimpleRectButton) Tapped(*fyne.PointEvent) {
 
 func (b *SimpleRectButton) SetText(text string) {
 	b.Text = text
-	b.Refresh()
+	runOnMainThread(func() {
+		b.Refresh()
+	})
 }
 
 func (b *SimpleRectButton) Enable() {
@@ -393,7 +409,9 @@ func (b *SimpleRectButton) Enable() {
 		return
 	}
 	b.Disabled = false
-	b.Refresh()
+	runOnMainThread(func() {
+		b.Refresh()
+	})
 }
 
 func (b *SimpleRectButton) Disable() {
@@ -401,21 +419,27 @@ func (b *SimpleRectButton) Disable() {
 		return
 	}
 	b.Disabled = true
-	b.Refresh()
+	runOnMainThread(func() {
+		b.Refresh()
+	})
 }
 
 // Hover handling (desktop only)
 func (b *SimpleRectButton) MouseIn(*desktop.MouseEvent) {
 	if !b.Disabled {
 		b.hovered = true
-		b.Refresh()
+		runOnMainThread(func() {
+			b.Refresh()
+		})
 	}
 }
 func (b *SimpleRectButton) MouseMoved(*desktop.MouseEvent) {}
 func (b *SimpleRectButton) MouseOut() {
 	if !b.Disabled {
 		b.hovered = false
-		b.Refresh()
+		runOnMainThread(func() {
+			b.Refresh()
+		})
 	}
 }
 
@@ -453,7 +477,9 @@ func NewCustomSelect(options []string, onChanged func(string)) *CustomSelect {
 
 func (cs *CustomSelect) SetSelected(s string) {
 	cs.Selected = s
-	cs.Refresh()
+	runOnMainThread(func() {
+		cs.Refresh()
+	})
 }
 
 func (cs *CustomSelect) MinSize() fyne.Size {
@@ -509,7 +535,6 @@ func (r *customSelectRenderer) Refresh() {
 		// Dark theme: use light text
 		r.text.Color = toNRGBA(hex("#ebdbb2")) // Light text
 	}
-	r.text.Refresh()
 
 	// hover / press overlay (theme-aware)
 	var col color.NRGBA
@@ -528,8 +553,11 @@ func (r *customSelectRenderer) Refresh() {
 		col = color.NRGBA{R: 0, G: 0, B: 0, A: 0}
 	}
 	r.overlay.FillColor = col
-	r.overlay.Refresh()
-	r.cont.Refresh()
+	runOnMainThread(func() {
+		r.text.Refresh()
+		r.overlay.Refresh()
+		r.cont.Refresh()
+	})
 }
 
 func (r *customSelectRenderer) BackgroundColor() fyne.ThemeColorName {
@@ -545,7 +573,9 @@ func (r *customSelectRenderer) Destroy() {}
 func (cs *CustomSelect) Tapped(_ *fyne.PointEvent) {
 	// brief press flash
 	cs.pressed = true
-	cs.Refresh()
+	runOnMainThread(func() {
+		cs.Refresh()
+	})
 	go func(s *CustomSelect) {
 		time.Sleep(120 * time.Millisecond)
 		runOnMainThread(func() {
@@ -559,7 +589,9 @@ func (cs *CustomSelect) Tapped(_ *fyne.PointEvent) {
 		option := opt // Capture loop variable
 		items[i] = fyne.NewMenuItem(option, func() {
 			cs.Selected = option
-			cs.Refresh()
+			runOnMainThread(func() {
+				cs.Refresh()
+			})
 			if cs.OnChanged != nil {
 				cs.OnChanged(option)
 			}
@@ -589,9 +621,15 @@ func (cs *CustomSelect) FocusLost() {
 }
 
 // Hover handling (desktop only)
-func (cs *CustomSelect) MouseIn(*desktop.MouseEvent)    { cs.hovered = true; cs.Refresh() }
+func (cs *CustomSelect) MouseIn(*desktop.MouseEvent) {
+	cs.hovered = true
+	runOnMainThread(func() { cs.Refresh() })
+}
 func (cs *CustomSelect) MouseMoved(*desktop.MouseEvent) {}
-func (cs *CustomSelect) MouseOut()                      { cs.hovered = false; cs.Refresh() }
+func (cs *CustomSelect) MouseOut() {
+	cs.hovered = false
+	runOnMainThread(func() { cs.Refresh() })
+}
 
 // CreateStyledSelect wraps a Select widget in a rounded container with custom background
 // Accepts any CanvasObject (including widget.Select and CustomSelect)
@@ -645,7 +683,9 @@ func (b *TinyIconButton) MinSize() fyne.Size {
 func (b *TinyIconButton) Tapped(*fyne.PointEvent) {
 	// Trigger press animation
 	b.pressed = true
-	b.Refresh()
+	runOnMainThread(func() {
+		b.Refresh()
+	})
 
 	// Execute callback
 	if b.OnTapped != nil {
@@ -664,7 +704,9 @@ func (b *TinyIconButton) Tapped(*fyne.PointEvent) {
 
 func (b *TinyIconButton) MouseIn(*desktop.MouseEvent) {
 	b.hovered = true
-	b.Refresh()
+	runOnMainThread(func() {
+		b.Refresh()
+	})
 }
 
 func (b *TinyIconButton) MouseMoved(*desktop.MouseEvent) {
@@ -673,7 +715,9 @@ func (b *TinyIconButton) MouseMoved(*desktop.MouseEvent) {
 
 func (b *TinyIconButton) MouseOut() {
 	b.hovered = false
-	b.Refresh()
+	runOnMainThread(func() {
+		b.Refresh()
+	})
 }
 
 // tinyIconButtonRenderer renders a TinyIconButton with visual feedback
@@ -706,8 +750,10 @@ func (r *tinyIconButtonRenderer) Refresh() {
 		// Normal state - transparent
 		r.bg.FillColor = color.NRGBA{R: 0, G: 0, B: 0, A: 0}
 	}
-	r.bg.Refresh()
-	r.icon.Refresh()
+	runOnMainThread(func() {
+		r.bg.Refresh()
+		r.icon.Refresh()
+	})
 }
 
 func (r *tinyIconButtonRenderer) Objects() []fyne.CanvasObject {
@@ -794,7 +840,9 @@ func (ns *NumberSpinner) SetValue(v int) {
 		return
 	}
 	ns.Value = v
-	ns.Refresh()
+	runOnMainThread(func() {
+		ns.Refresh()
+	})
 	if ns.OnChanged != nil {
 		ns.OnChanged(v)
 	}
@@ -867,9 +915,11 @@ func (r *numberSpinnerRenderer) MinSize() fyne.Size {
 func (r *numberSpinnerRenderer) Refresh() {
 	// Update text display with current value
 	r.txt.Text = fmt.Sprintf("%d", r.spinner.Value)
-	r.txt.Refresh()
-	r.bg.Refresh()
-	r.stack.Refresh()
+	runOnMainThread(func() {
+		r.txt.Refresh()
+		r.bg.Refresh()
+		r.stack.Refresh()
+	})
 }
 
 func (r *numberSpinnerRenderer) Objects() []fyne.CanvasObject {
@@ -928,4 +978,59 @@ func (ns *NumberSpinner) Tapped(*fyne.PointEvent) {
 		}
 		ns.SetValue(v)
 	}, ns.Window).Show()
+}
+
+// FlashWindow creates a visual flash effect on a window to indicate it's already open
+// The window will flash 3 times over 600ms total
+func FlashWindow(win fyne.Window) {
+	if win == nil {
+		return
+	}
+
+	// Get the window's current content
+	content := win.Content()
+	if content == nil {
+		return
+	}
+
+	// Create a semi-transparent white overlay for the flash effect
+	overlay := canvas.NewRectangle(color.NRGBA{R: 255, G: 255, B: 255, A: 0})
+
+	// Stack the overlay on top of existing content
+	flashContent := container.NewStack(content, overlay)
+	win.SetContent(flashContent)
+
+	// Animate the flash: 3 quick pulses
+	flashCount := 3
+	flashDuration := 100 * time.Millisecond
+
+	for i := 0; i < flashCount; i++ {
+		i := i // capture for closure
+
+		// Flash on
+		time.AfterFunc(time.Duration(i*2)*flashDuration, func() {
+			runOnMainThread(func() {
+				overlay.FillColor = color.NRGBA{R: 255, G: 255, B: 255, A: 60}
+				overlay.Refresh()
+			})
+		})
+
+		// Flash off
+		time.AfterFunc(time.Duration(i*2+1)*flashDuration, func() {
+			runOnMainThread(func() {
+				overlay.FillColor = color.NRGBA{R: 255, G: 255, B: 255, A: 0}
+				overlay.Refresh()
+			})
+		})
+	}
+
+	// Remove overlay after animation completes
+	time.AfterFunc(time.Duration(flashCount*2)*flashDuration, func() {
+		runOnMainThread(func() {
+			win.SetContent(content)
+		})
+	})
+
+	// Also bring window to front
+	win.RequestFocus()
 }
