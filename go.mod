@@ -1,4 +1,4 @@
-module todo-list-migration
+module godo
 
 go 1.19
 

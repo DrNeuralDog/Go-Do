@@ -1,6 +1,11 @@
 package ui
 
-import "fyne.io/fyne/v2"
+import (
+	"runtime"
+	"strings"
+
+	"fyne.io/fyne/v2"
+)
 
 // runOnMainThread ensures the provided function executes on the Fyne UI thread.
 // Fyne widgets must only be touched from the main thread, so goroutines should
@@ -10,28 +15,25 @@ func runOnMainThread(fn func()) {
 		return
 	}
 
-	app := fyne.CurrentApp()
-	if app == nil {
+	// Check if we're already on the main thread by examining the call stack
+	// If we're on the main goroutine, just execute directly
+	if isMainThread() {
 		fn()
 		return
 	}
 
-	driver := app.Driver()
-	if driver == nil {
-		fn()
-		return
-	}
+	// Otherwise, schedule on main thread without waiting (to avoid deadlock)
+	fyne.Do(fn)
+}
 
-	// Different Fyne driver versions expose either RunOnMain or CallOnMain;
-	// try both before falling back to executing inline.
-	if runner, ok := driver.(interface{ RunOnMain(func()) }); ok {
-		runner.RunOnMain(fn)
-		return
-	}
-	if caller, ok := driver.(interface{ CallOnMain(func()) }); ok {
-		caller.CallOnMain(fn)
-		return
-	}
+// isMainThread checks if we're currently on the main UI thread
+func isMainThread() bool {
+	// Get stack trace
+	buf := make([]byte, 1024)
+	n := runtime.Stack(buf, false)
+	stack := string(buf[:n])
 
-	fn()
+	// If stack contains "main.main" or we're in goroutine 1, we're on main thread
+	// This is a heuristic but works for most cases
+	return strings.Contains(stack, "main.main") || strings.HasPrefix(stack, "goroutine 1 ")
 }

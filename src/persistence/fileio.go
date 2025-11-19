@@ -11,8 +11,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"todo-list-migration/src/models"
-	"todo-list-migration/src/utils"
+	"godo/src/models"
+	"godo/src/utils"
 )
 
 // FileIOManager handles file operations for todo data persistence

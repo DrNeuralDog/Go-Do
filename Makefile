@@ -9,10 +9,10 @@ GOGET=$(GOCMD) get
 GOMOD=$(GOCMD) mod
 
 # Binary names and paths
-BINARY_NAME=todo-list
+BINARY_NAME=GoDo
 BINARY_WINDOWS=$(BINARY_NAME).exe
-BINARY_LINUX=$(BINARY_NAME)-linux
-BINARY_MACOS=$(BINARY_NAME)-macos
+BINARY_LINUX=$(BINARY_NAME)
+BINARY_MACOS=$(BINARY_NAME)
 BUILD_DIR=bin
 
 # Build targets
@@ -23,25 +23,25 @@ all: deps test build
 # Build for current platform
 build:
 	@echo "Building for current platform..."
-	@mkdir -p $(BUILD_DIR)
-	$(GOBUILD) -o $(BUILD_DIR)/$(BINARY_NAME) src/main.go
+	@powershell -NoProfile -Command "if (-not (Test-Path '$(BUILD_DIR)')) { New-Item -ItemType Directory -Path '$(BUILD_DIR)' | Out-Null }"
+	$(GOBUILD) -o $(BUILD_DIR)/$(BINARY_WINDOWS) src/main.go
 
 # Build for Windows
 build-windows:
 	@echo "Building for Windows..."
-	@mkdir -p $(BUILD_DIR)
+	@powershell -NoProfile -Command "if (-not (Test-Path '$(BUILD_DIR)')) { New-Item -ItemType Directory -Path '$(BUILD_DIR)' | Out-Null }"
 	GOOS=windows GOARCH=amd64 $(GOBUILD) -o $(BUILD_DIR)/$(BINARY_WINDOWS) src/main.go
 
 # Build for Linux
 build-linux:
 	@echo "Building for Linux..."
-	@mkdir -p $(BUILD_DIR)
+	@powershell -NoProfile -Command "if (-not (Test-Path '$(BUILD_DIR)')) { New-Item -ItemType Directory -Path '$(BUILD_DIR)' | Out-Null }"
 	GOOS=linux GOARCH=amd64 $(GOBUILD) -o $(BUILD_DIR)/$(BINARY_LINUX) src/main.go
 
 # Build for macOS
 build-macos:
 	@echo "Building for macOS..."
-	@mkdir -p $(BUILD_DIR)
+	@powershell -NoProfile -Command "if (-not (Test-Path '$(BUILD_DIR)')) { New-Item -ItemType Directory -Path '$(BUILD_DIR)' | Out-Null }"
 	GOOS=darwin GOARCH=amd64 $(GOBUILD) -o $(BUILD_DIR)/$(BINARY_MACOS) src/main.go
 
 # Build for all platforms
@@ -80,7 +80,7 @@ deps-update:
 # Run the application
 run: build
 	@echo "Running application..."
-	./$(BUILD_DIR)/$(BINARY_NAME)
+	.\bin\$(BINARY_WINDOWS)
 
 # Development run (with rebuild)
 dev: clean deps test build run

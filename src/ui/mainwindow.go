@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
-	assets "todo-list-migration/doc"
-	"todo-list-migration/src/localization"
-	"todo-list-migration/src/models"
-	"todo-list-migration/src/persistence"
-	"todo-list-migration/src/ui/forms"
+	assets "godo/doc"
+	"godo/src/localization"
+	"godo/src/models"
+	"godo/src/persistence"
+	"godo/src/ui/forms"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -24,10 +24,12 @@ import (
 
 // MainWindow represents the main application window
 type MainWindow struct {
-	window      fyne.Window
-	dataManager *persistence.MonthlyManager
-	todoForm    *forms.TodoForm
-	timeline    *Timeline
+	window        fyne.Window
+	dataManager   *persistence.MonthlyManager
+	configManager *persistence.ConfigManager
+	config        *models.Config
+	todoForm      *forms.TodoForm
+	timeline      *Timeline
 
 	// UI components
 	titleLabel  *widget.Label
@@ -49,20 +51,27 @@ type MainWindow struct {
 	todos          []*models.TodoItem
 	isGruvbox      bool
 	pomodoroWindow *PomodoroWindow // Reference to open pomodoro window
+	todoFormWindow fyne.Window     // Reference to open todo form window
 }
 
 // NewMainWindow creates a new main window
 func NewMainWindow(window fyne.Window, dataDir string) *MainWindow {
 	mw := &MainWindow{
-		window:      window,
-		dataManager: persistence.NewMonthlyManager(dataDir),
-		currentDate: time.Now(), // Start with today
-		viewMode:    models.ViewIncomplete,
-		isGruvbox:   false,
+		window:        window,
+		dataManager:   persistence.NewMonthlyManager(dataDir),
+		configManager: persistence.NewConfigManager(dataDir),
+		currentDate:   time.Now(), // Start with today
+		viewMode:      models.ViewIncomplete,
+		isGruvbox:     false,
 	}
 
-	// Find and set to latest day with data
-	mw.findAndSetCurrentDateFromDataFile()
+	// Load configuration
+	mw.loadConfig()
+
+	// Find and set to latest day with data (if config has no saved date)
+	if mw.config.GetCurrentDate().IsZero() {
+		mw.findAndSetCurrentDateFromDataFile()
+	}
 
 	// Initialize todo form
 	mw.todoForm = forms.NewTodoForm(window, mw.dataManager)
@@ -236,6 +245,8 @@ func (mw *MainWindow) setupUI() {
 		}
 		mw.loadTodos()
 		mw.refreshView()
+		// Save config after view mode change
+		mw.saveConfig()
 	})
 	mw.viewSelect.SetSelected(mw.viewMode.GetLabel())
 
@@ -329,6 +340,9 @@ func (mw *MainWindow) onThemeToggleClicked() {
 	if mw.pomodoroWindow != nil {
 		mw.pomodoroWindow.UpdateTheme(mw.isGruvbox)
 	}
+
+	// Save config after theme change
+	mw.saveConfig()
 }
 
 // loadTodos loads todos for the current day
@@ -396,23 +410,44 @@ func (mw *MainWindow) refreshView() {
 // Event handlers
 
 func (mw *MainWindow) onAddButtonClicked() {
-	mw.todoForm.ShowCreateWindow(func() {
-		// Refresh the todo list after saving
-		mw.loadTodos()
-		mw.refreshView()
-	})
+	// If todo form window already exists, flash it instead of opening a new one
+	if mw.todoFormWindow != nil {
+		FlashWindow(mw.todoFormWindow)
+		return
+	}
+
+	// Pass callback to track when window is created and closed
+	mw.todoForm.ShowCreateWindow(
+		func() {
+			// Refresh the todo list after saving
+			mw.loadTodos()
+			mw.refreshView()
+		},
+		func(win fyne.Window) {
+			// Window created - store reference
+			mw.todoFormWindow = win
+		},
+		func() {
+			// Window closed - clear reference
+			mw.todoFormWindow = nil
+		},
+	)
 }
 
 func (mw *MainWindow) onPrevDayClicked() {
 	mw.currentDate = mw.currentDate.AddDate(0, 0, -1)
 	mw.loadTodos()
 	mw.refreshView()
+	// Save config after date change
+	mw.saveConfig()
 }
 
 func (mw *MainWindow) onNextDayClicked() {
 	mw.currentDate = mw.currentDate.AddDate(0, 0, 1)
 	mw.loadTodos()
 	mw.refreshView()
+	// Save config after date change
+	mw.saveConfig()
 }
 
 func (mw *MainWindow) onViewModeClicked() {
@@ -429,12 +464,30 @@ func (mw *MainWindow) onViewModeClicked() {
 func (mw *MainWindow) onTodoSelected(todo *models.TodoItem, todoTime time.Time) {
 	fmt.Printf("Selected todo: %s\n", todo.Name)
 
-	// Open edit dialog
-	mw.todoForm.ShowEditWindow(todo, todoTime, func() {
-		// Refresh the todo list after saving
-		mw.loadTodos()
-		mw.refreshView()
-	})
+	// If todo form window already exists, flash it instead of opening a new one
+	if mw.todoFormWindow != nil {
+		FlashWindow(mw.todoFormWindow)
+		return
+	}
+
+	// Open edit window with callbacks
+	mw.todoForm.ShowEditWindow(
+		todo,
+		todoTime,
+		func() {
+			// Refresh the todo list after saving
+			mw.loadTodos()
+			mw.refreshView()
+		},
+		func(win fyne.Window) {
+			// Window created - store reference
+			mw.todoFormWindow = win
+		},
+		func() {
+			// Window closed - clear reference
+			mw.todoFormWindow = nil
+		},
+	)
 }
 
 // onTodoReorder handles reorder requests from timeline (delta = -1 up, +1 down)
@@ -623,9 +676,9 @@ func (mw *MainWindow) setupBottomButtons() fyne.CanvasObject {
 
 // onPomodoroTopClicked handles the top pomodoro button click
 func (mw *MainWindow) onPomodoroTopClicked() {
-	// If pomodoro window already exists and is visible, just show it
+	// If pomodoro window already exists, flash it instead of opening a new one
 	if mw.pomodoroWindow != nil {
-		mw.pomodoroWindow.Show()
+		FlashWindow(mw.pomodoroWindow.window)
 		return
 	}
 
@@ -638,4 +691,73 @@ func (mw *MainWindow) onPomodoroTopClicked() {
 	})
 
 	mw.pomodoroWindow.Show()
+}
+
+// loadConfig loads the application configuration and applies UI state
+func (mw *MainWindow) loadConfig() {
+	config, err := mw.configManager.LoadConfig()
+	if err != nil {
+		fmt.Printf("Failed to load config: %v, using defaults\n", err)
+		config = models.NewDefaultConfig()
+	}
+	mw.config = config
+
+	// Apply theme
+	if config.GetTheme() == "dark" {
+		mw.isGruvbox = true
+		fyne.CurrentApp().Settings().SetTheme(NewGruvboxBlackTheme())
+	} else {
+		mw.isGruvbox = false
+		fyne.CurrentApp().Settings().SetTheme(NewLightSoftTheme())
+	}
+
+	// Apply view mode
+	switch config.GetViewMode() {
+	case "all":
+		mw.viewMode = models.ViewAll
+	case "incomplete":
+		mw.viewMode = models.ViewIncomplete
+	case "complete":
+		mw.viewMode = models.ViewComplete
+	case "starred":
+		mw.viewMode = models.ViewStarred
+	default:
+		mw.viewMode = models.ViewIncomplete
+	}
+
+	// Apply current date
+	if !config.GetCurrentDate().IsZero() {
+		mw.currentDate = config.GetCurrentDate()
+	}
+}
+
+// saveConfig saves the current UI state to configuration
+func (mw *MainWindow) saveConfig() {
+	// Update config with current UI state
+	if mw.isGruvbox {
+		mw.config.SetTheme("dark")
+	} else {
+		mw.config.SetTheme("light")
+	}
+
+	// Map ViewMode to string
+	viewModeStr := "incomplete"
+	switch mw.viewMode {
+	case models.ViewAll:
+		viewModeStr = "all"
+	case models.ViewIncomplete:
+		viewModeStr = "incomplete"
+	case models.ViewComplete:
+		viewModeStr = "complete"
+	case models.ViewStarred:
+		viewModeStr = "starred"
+	}
+	mw.config.SetViewMode(viewModeStr)
+
+	mw.config.SetCurrentDate(mw.currentDate)
+
+	// Save to disk
+	if err := mw.configManager.SaveConfig(mw.config); err != nil {
+		fmt.Printf("Failed to save config: %v\n", err)
+	}
 }

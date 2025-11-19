@@ -18,7 +18,7 @@ go mod tidy
 # Build for current platform
 make build
 # or
-go build -o bin/todo-list src/main.go
+go build -o bin/GoDo.exe src/main.go
 
 # Run tests
 make test
@@ -43,7 +43,7 @@ make dev
 # Windows
 make build-windows
 # or
-GOOS=windows GOARCH=amd64 go build -o bin/todo-list.exe src/main.go
+GOOS=windows GOARCH=amd64 go build -o bin/GoDo.exe src/main.go
 
 # macOS
 make build-macos

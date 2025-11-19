@@ -6,7 +6,7 @@ import (
 	"math"
 	"time"
 
-	"todo-list-migration/src/models"
+	"godo/src/models"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"

@@ -12,7 +12,19 @@
       "Bash(fi)",
       "Bash(dir:*)",
       "Bash(.bintodo-list.exe)",
-      "Bash(start bin/todo-list.exe)"
+      "Bash(start bin/todo-list.exe)",
+      "Bash(powershell:*)",
+      "Bash(make clean:*)",
+      "Bash(make build:*)",
+      "Bash(if exist godo del godo)",
+      "Bash(if exist todo-list.exe del todo-list.exe)",
+      "Bash(del todo-list-migration.exe nul)",
+      "Bash(make build-windows:*)",
+      "Bash(make build-linux:*)",
+      "Bash(make build-macos:*)",
+      "Bash(go help:*)",
+      "Bash(findstr:*)",
+      "Bash(rm:*)"
     ],
     "deny": [],
     "ask": []

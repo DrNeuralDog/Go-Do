@@ -5,9 +5,9 @@ import (
 	"image/color"
 	"time"
 
-	"todo-list-migration/src/localization"
-	"todo-list-migration/src/models"
-	"todo-list-migration/src/persistence"
+	"godo/src/localization"
+	"godo/src/models"
+	"godo/src/persistence"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -145,7 +145,9 @@ func (r *timelineRenderer) Refresh() {
 		// Rebuild children objects
 		objects := r.buildTimelineObjects()
 		r.listBox.Objects = objects
-		r.listBox.Refresh()
+		runOnMainThread(func() {
+			r.listBox.Refresh()
+		})
 		r.scroll.Offset = offset
 		if size := r.timeline.Size(); size.Width > 0 && size.Height > 0 {
 			r.scroll.Resize(size)
@@ -254,6 +256,7 @@ func (r *timelineRenderer) createTodoItem(todo *models.TodoItem) fyne.CanvasObje
 	colorSquare.CornerRadius = 2 // Sharper corners (was 6)
 	colorSquare.SetMinSize(fyne.NewSize(16, 32))
 	colorSquareWrap := container.NewGridWrap(fyne.NewSize(16, 32), colorSquare)
+	colorSquareAligned := verticallyCenterCompact(colorSquareWrap)
 
 	// Custom square checkbox 20x20 per mockup, centered vertically
 	doneCheck := newSquareCheckbox(todo.Done, func(checked bool) {
@@ -267,7 +270,7 @@ func (r *timelineRenderer) createTodoItem(todo *models.TodoItem) fyne.CanvasObje
 		}
 	})
 	// Wrap checkbox in container for vertical centering
-	doneCheckCentered := container.NewCenter(doneCheck)
+	doneCheckCentered := verticallyCenterCompact(doneCheck)
 
 	// Todo name - takes the remaining space, 18px from mockup
 	nameLabel := widget.NewLabel(todo.Name)
@@ -283,7 +286,7 @@ func (r *timelineRenderer) createTodoItem(todo *models.TodoItem) fyne.CanvasObje
 	}
 	timeText := canvas.NewText(fmt.Sprintf("%02d:%02d", todo.TodoTime.Hour(), todo.TodoTime.Minute()), timeColor)
 	timeText.TextSize = 18
-	timeLabel := container.NewCenter(timeText)
+	timeLabel := verticallyCenterCompact(timeText)
 
 	// Status: ✓ if done, else ★ if starred; toggle star on tap when not done
 	status := newStatusIndicator(todo, func(toggleStar bool) {
@@ -297,21 +300,21 @@ func (r *timelineRenderer) createTodoItem(todo *models.TodoItem) fyne.CanvasObje
 			r.timeline.notifyTodosChanged()
 		}
 	})
-	// Push star down to center it vertically in the row
-	statusCentered := container.NewVBox(CreateSpacer(1, 7), status)
+	// Keep status aligned with the schedule time for a cleaner row
+	statusCentered := verticallyCenterCompact(status)
 
 	// Delete action: show trash icon right of status
 	deleteBtn := widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {
 		r.timeline.confirmDelete(todo)
 	})
 	deleteBtn.Importance = widget.LowImportance
-	deleteBtnCentered := container.NewVBox(CreateSpacer(1, 7), container.NewCenter(deleteBtn))
+	deleteBtnCentered := verticallyCenterCompact(deleteBtn)
 
 	// Layout: [ColorSquare] [Spacer] [Checkbox] [Name................] [Time] [Star] [Delete]
 	// Add spacer between color and checkbox (doubled spacing)
-	leftSection := container.NewHBox(colorSquareWrap, CreateSpacer(8, 1), doneCheckCentered)
+	leftSection := container.NewHBox(colorSquareAligned, CreateSpacer(8, 1), doneCheckCentered)
 	rightSection := container.NewHBox(timeLabel, CreateSpacer(8, 1), statusCentered, CreateSpacer(4, 1), deleteBtnCentered)
-	content := container.NewBorder(nil, nil, leftSection, rightSection, nameLabel)
+	content := container.NewBorder(nil, nil, leftSection, rightSection, verticallyCenterWide(nameLabel))
 
 	// Row with bottom border only (no card)
 	var borderClr color.Color
@@ -356,9 +359,11 @@ func (r *timelineRenderer) createTodoItem(todo *models.TodoItem) fyne.CanvasObje
 		// Shadow effect - dark gradient
 		shadowRect.FillColor = color.NRGBA{R: 0, G: 0, B: 0, A: 30}
 
-		pressOverlay.Refresh()
-		borderRect.Refresh()
-		shadowRect.Refresh()
+		runOnMainThread(func() {
+			pressOverlay.Refresh()
+			borderRect.Refresh()
+			shadowRect.Refresh()
+		})
 	}
 
 	// Make the entire item clickable
@@ -378,6 +383,16 @@ func (r *timelineRenderer) createTodoItem(todo *models.TodoItem) fyne.CanvasObje
 	tappable.ExtendBaseWidget(tappable)
 
 	return tappable
+}
+
+// verticallyCenterCompact keeps the child at its natural size while centering it vertically.
+func verticallyCenterCompact(obj fyne.CanvasObject) fyne.CanvasObject {
+	return container.NewVBox(layout.NewSpacer(), container.NewCenter(obj), layout.NewSpacer())
+}
+
+// verticallyCenterWide centers the child vertically but allows it to stretch horizontally.
+func verticallyCenterWide(obj fyne.CanvasObject) fyne.CanvasObject {
+	return container.NewVBox(layout.NewSpacer(), obj, layout.NewSpacer())
 }
 
 // tappableTodo makes todo items clickable
@@ -417,7 +432,9 @@ func (tt *tappableTodo) Tapped(*fyne.PointEvent) {
 			col.A = 60
 		}
 		tt.press.FillColor = col
-		tt.press.Refresh()
+		runOnMainThread(func() {
+			tt.press.Refresh()
+		})
 		go func(p *canvas.Rectangle) {
 			time.Sleep(120 * time.Millisecond)
 			runOnMainThread(func() {
@@ -440,7 +457,9 @@ func (tt *tappableTodo) Dragged(e *fyne.DragEvent) {
 		// Enhanced highlight with higher opacity (80 instead of 50)
 		if tt.press != nil {
 			tt.press.FillColor = color.NRGBA{R: 0x3C, G: 0x82, B: 0xFF, A: 80}
-			tt.press.Refresh()
+			runOnMainThread(func() {
+				tt.press.Refresh()
+			})
 		}
 
 		// Border effect - blue outline
@@ -448,13 +467,17 @@ func (tt *tappableTodo) Dragged(e *fyne.DragEvent) {
 			tt.border.FillColor = color.Transparent
 			tt.border.StrokeColor = color.NRGBA{R: 0x3C, G: 0x82, B: 0xFF, A: 200}
 			tt.border.StrokeWidth = 2
-			tt.border.Refresh()
+			runOnMainThread(func() {
+				tt.border.Refresh()
+			})
 		}
 
 		// Shadow effect - dark semi-transparent
 		if tt.shadow != nil {
 			tt.shadow.FillColor = color.NRGBA{R: 0, G: 0, B: 0, A: 30}
-			tt.shadow.Refresh()
+			runOnMainThread(func() {
+				tt.shadow.Refresh()
+			})
 		}
 
 		if tt.timeline != nil {
@@ -626,20 +649,22 @@ func (tt *tappableTodo) DragEnd() {
 	tt.dragAccumY = 0
 
 	// Clear all drag visual effects
-	if tt.press != nil {
-		tt.press.FillColor = color.NRGBA{R: 0, G: 0, B: 0, A: 0}
-		tt.press.Refresh()
-	}
-	if tt.border != nil {
-		tt.border.FillColor = color.NRGBA{R: 0, G: 0, B: 0, A: 0}
-		tt.border.StrokeColor = color.NRGBA{R: 0, G: 0, B: 0, A: 0}
-		tt.border.StrokeWidth = 0
-		tt.border.Refresh()
-	}
-	if tt.shadow != nil {
-		tt.shadow.FillColor = color.NRGBA{R: 0, G: 0, B: 0, A: 0}
-		tt.shadow.Refresh()
-	}
+	runOnMainThread(func() {
+		if tt.press != nil {
+			tt.press.FillColor = color.NRGBA{R: 0, G: 0, B: 0, A: 0}
+			tt.press.Refresh()
+		}
+		if tt.border != nil {
+			tt.border.FillColor = color.NRGBA{R: 0, G: 0, B: 0, A: 0}
+			tt.border.StrokeColor = color.NRGBA{R: 0, G: 0, B: 0, A: 0}
+			tt.border.StrokeWidth = 0
+			tt.border.Refresh()
+		}
+		if tt.shadow != nil {
+			tt.shadow.FillColor = color.NRGBA{R: 0, G: 0, B: 0, A: 0}
+			tt.shadow.Refresh()
+		}
+	})
 
 	if tt.onReorderEnd != nil {
 		tt.onReorderEnd()
@@ -659,7 +684,9 @@ func (tt *tappableTodo) MouseDown(e *desktop.MouseEvent) {
 	if tt.press != nil {
 		// Blue tint with ~20% opacity for both themes
 		tt.press.FillColor = color.NRGBA{R: 0x3C, G: 0x82, B: 0xFF, A: 50}
-		tt.press.Refresh()
+		runOnMainThread(func() {
+			tt.press.Refresh()
+		})
 	}
 	if tt.timeline != nil {
 		tt.timeline.draggingTodo = tt.todo
@@ -692,20 +719,22 @@ func (tt *tappableTodo) MouseUp(*desktop.MouseEvent) {
 	tt.dragAccumY = 0
 
 	// Clear all drag visual effects
-	if tt.press != nil {
-		tt.press.FillColor = color.NRGBA{R: 0, G: 0, B: 0, A: 0}
-		tt.press.Refresh()
-	}
-	if tt.border != nil {
-		tt.border.FillColor = color.NRGBA{R: 0, G: 0, B: 0, A: 0}
-		tt.border.StrokeColor = color.NRGBA{R: 0, G: 0, B: 0, A: 0}
-		tt.border.StrokeWidth = 0
-		tt.border.Refresh()
-	}
-	if tt.shadow != nil {
-		tt.shadow.FillColor = color.NRGBA{R: 0, G: 0, B: 0, A: 0}
-		tt.shadow.Refresh()
-	}
+	runOnMainThread(func() {
+		if tt.press != nil {
+			tt.press.FillColor = color.NRGBA{R: 0, G: 0, B: 0, A: 0}
+			tt.press.Refresh()
+		}
+		if tt.border != nil {
+			tt.border.FillColor = color.NRGBA{R: 0, G: 0, B: 0, A: 0}
+			tt.border.StrokeColor = color.NRGBA{R: 0, G: 0, B: 0, A: 0}
+			tt.border.StrokeWidth = 0
+			tt.border.Refresh()
+		}
+		if tt.shadow != nil {
+			tt.shadow.FillColor = color.NRGBA{R: 0, G: 0, B: 0, A: 0}
+			tt.shadow.Refresh()
+		}
+	})
 
 	if tt.onReorderEnd != nil {
 		tt.onReorderEnd()
@@ -771,7 +800,9 @@ func (c *squareCheckbox) Tapped(*fyne.PointEvent) {
 	if c.onChanged != nil {
 		c.onChanged(c.checked)
 	}
-	c.Refresh()
+	runOnMainThread(func() {
+		c.Refresh()
+	})
 }
 
 func (c *squareCheckbox) Refresh() {
@@ -782,18 +813,20 @@ func (c *squareCheckbox) Refresh() {
 	} else {
 		fillChecked = color.NRGBA{R: 0x98, G: 0x97, B: 0x1a, A: 0xFF}
 	}
-	if c.rect != nil && c.tick != nil {
-		if c.checked {
-			c.rect.FillColor = fillChecked
-			c.tick.Text = "✓"
-		} else {
-			c.rect.FillColor = color.NRGBA{R: 0, G: 0, B: 0, A: 0}
-			c.tick.Text = ""
+	runOnMainThread(func() {
+		if c.rect != nil && c.tick != nil {
+			if c.checked {
+				c.rect.FillColor = fillChecked
+				c.tick.Text = "✓"
+			} else {
+				c.rect.FillColor = color.NRGBA{R: 0, G: 0, B: 0, A: 0}
+				c.tick.Text = ""
+			}
+			c.rect.Refresh()
+			c.tick.Refresh()
 		}
-		c.rect.Refresh()
-		c.tick.Refresh()
-	}
-	c.BaseWidget.Refresh()
+		c.BaseWidget.Refresh()
+	})
 }
 
 // Status indicator (✓ or ★), star toggles on tap when shown
