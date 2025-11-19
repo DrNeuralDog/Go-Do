@@ -11,7 +11,8 @@
       "Bash(then mkdir .vscode)",
       "Bash(fi)",
       "Bash(dir:*)",
-      "Bash(.bintodo-list.exe)"
+      "Bash(.bintodo-list.exe)",
+      "Bash(start bin/todo-list.exe)"
     ],
     "deny": [],
     "ask": []
