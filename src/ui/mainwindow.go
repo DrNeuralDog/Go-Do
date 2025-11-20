@@ -11,6 +11,7 @@ import (
 	"godo/src/persistence"
 	"godo/src/ui/forms"
 	"godo/src/ui/helpers"
+	"godo/src/ui/widgets"
 	"godo/src/utils"
 
 	"fyne.io/fyne/v2"
@@ -37,11 +38,11 @@ type MainWindow struct {
 	viewModeBtn *widget.Button // legacy hidden
 	themeBtn    *widget.Button // legacy hidden
 	// Styled controls
-	viewSelect      *CustomSelect
-	prevRectBtn     *SimpleRectButton
-	nextRectBtn     *SimpleRectButton
-	pomodoroRectBtn *SimpleRectButton
-	themeRectBtn    *SimpleRectButton
+	viewSelect      *widgets.CustomSelect
+	prevRectBtn     *widgets.SimpleRectButton
+	nextRectBtn     *widgets.SimpleRectButton
+	pomodoroRectBtn *widgets.SimpleRectButton
+	themeRectBtn    *widgets.SimpleRectButton
 
 	// State
 	currentDate    time.Time // Changed to time.Time for daily view

@@ -113,8 +113,13 @@ func (t *TodoItem) GetWarnTime() int {
 	return t.WarnTime
 }
 
-func (t *TodoItem) HaveDone() bool {
+func (t *TodoItem) IsDone() bool {
 	return t.Done
+}
+
+// HaveDone is deprecated, use IsDone() instead
+func (t *TodoItem) HaveDone() bool {
+	return t.IsDone()
 }
 
 // IsBefore returns true if this todo item comes before the other item chronologically
