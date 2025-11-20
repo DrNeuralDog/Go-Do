@@ -3,10 +3,6 @@ package ui
 import (
 	"fmt"
 	"image/color"
-	"os"
-	"sort"
-	"strconv"
-	"strings"
 	"time"
 
 	assets "godo/doc"
@@ -14,6 +10,8 @@ import (
 	"godo/src/models"
 	"godo/src/persistence"
 	"godo/src/ui/forms"
+	"godo/src/ui/helpers"
+	"godo/src/utils"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -25,8 +23,8 @@ import (
 // MainWindow represents the main application window
 type MainWindow struct {
 	window        fyne.Window
-	dataManager   *persistence.MonthlyManager
-	configManager *persistence.ConfigManager
+	dataManager   persistence.TodoRepository
+	configManager persistence.ConfigRepository
 	config        *models.Config
 	todoForm      *forms.TodoForm
 	timeline      *Timeline
@@ -55,11 +53,11 @@ type MainWindow struct {
 }
 
 // NewMainWindow creates a new main window
-func NewMainWindow(window fyne.Window, dataDir string) *MainWindow {
+func NewMainWindow(window fyne.Window, dataManager persistence.TodoRepository, configManager persistence.ConfigRepository) *MainWindow {
 	mw := &MainWindow{
 		window:        window,
-		dataManager:   persistence.NewMonthlyManager(dataDir),
-		configManager: persistence.NewConfigManager(dataDir),
+		dataManager:   dataManager,
+		configManager: configManager,
 		currentDate:   time.Now(), // Start with today
 		viewMode:      models.ViewIncomplete,
 		isGruvbox:     false,
@@ -97,34 +95,16 @@ func NewMainWindow(window fyne.Window, dataDir string) *MainWindow {
 
 // findAndSetCurrentDateFromDataFile looks for existing data files and sets currentDate to the latest day with todos
 func (mw *MainWindow) findAndSetCurrentDateFromDataFile() {
-	dataDir := mw.dataManager.GetDataDir()
-
-	// Look for data files
-	entries, err := os.ReadDir(dataDir)
+	months, err := mw.dataManager.GetAllMonths()
 	if err != nil {
-		return // Use current date if we can't read the directory
+		return
 	}
-
 	var latestTime time.Time
-	for _, entry := range entries {
-		if entry.IsDir() {
+	for _, dateKey := range months {
+		year, month := utils.ParseDateKey(dateKey)
+		if year == 0 {
 			continue
 		}
-		name := entry.Name()
-		if !strings.HasSuffix(name, ".yaml") && !strings.HasSuffix(name, ".txt") {
-			continue
-		}
-		filename := strings.TrimSuffix(strings.TrimSuffix(name, ".yaml"), ".txt")
-		if len(filename) != 6 {
-			continue
-		}
-		year, err1 := strconv.Atoi(filename[:4])
-		month, err2 := strconv.Atoi(filename[4:])
-		if err1 != nil || err2 != nil || month < 1 || month > 12 {
-			continue
-		}
-
-		// Load todos for this month
 		todos, err := mw.dataManager.GetTodosForMonth(year, month)
 		if err != nil {
 			continue
@@ -147,7 +127,7 @@ func (mw *MainWindow) findAndSetCurrentDateFromDataFile() {
 func (mw *MainWindow) setupUI() {
 	// Set window properties - matching mockup dimensions
 	mw.window.SetTitle(localization.GetString("window_title"))
-	mw.window.Resize(fyne.NewSize(420, 800))
+	mw.window.Resize(fyne.NewSize(MainWindowWidth, MainWindowHeight))
 	mw.window.SetFixedSize(true)
 
 	// Create UI components
@@ -175,10 +155,9 @@ func (mw *MainWindow) setupUI() {
 	// Get gradient colors from current theme
 	var startColor, endColor color.Color
 	currentTheme := fyne.CurrentApp().Settings().Theme()
-	if lightTheme, ok := currentTheme.(*LightSoftTheme); ok {
-		startColor, endColor = lightTheme.GetHeaderGradientColors()
-	} else if gruvboxTheme, ok := currentTheme.(*GruvboxBlackTheme); ok {
-		startColor, endColor = gruvboxTheme.GetHeaderGradientColors()
+	isLightTheme := helpers.IsLightTheme()
+	if gradientTheme, ok := currentTheme.(interface{ GetHeaderGradientColors() (color.Color, color.Color) }); ok {
+		startColor, endColor = gradientTheme.GetHeaderGradientColors()
 	} else {
 		// Fallback to primary color if theme doesn't support gradients
 		startColor = theme.Color(theme.ColorNamePrimary)
@@ -188,11 +167,11 @@ func (mw *MainWindow) setupUI() {
 	// Themed header icon from embedded assets and bottom-aligned with title
 	var titleColor color.Color
 	var logoRes fyne.Resource
-	if _, ok := currentTheme.(*LightSoftTheme); ok {
+	if isLightTheme {
 		titleColor = color.White
 		logoRes = assets.HeaderIconLight
 	} else {
-		titleColor = hex("#fabd2f")
+		titleColor = helpers.Hex(ColorHexGruvboxPrimary)
 		logoRes = assets.HeaderIconDark
 	}
 	logoImg := canvas.NewImageFromResource(logoRes)
@@ -213,7 +192,7 @@ func (mw *MainWindow) setupUI() {
 		iconPad = 0
 	}
 	logoAligned := container.NewVBox(
-		CreateSpacer(1, iconPad),
+		helpers.CreateSpacer(1, iconPad),
 		container.NewMax(logoImg),
 	)
 
@@ -221,12 +200,12 @@ func (mw *MainWindow) setupUI() {
 
 	// --- Controls row: [Select] [←] [→] [Add] ---
 	var navBg, navFg color.Color
-	if _, ok := currentTheme.(*LightSoftTheme); ok {
-		navBg = hex("#ff8c42")
+	if isLightTheme {
+		navBg = helpers.Hex(ColorHexAccentLight)
 		navFg = color.White
 	} else {
-		navBg = hex("#504945")
-		navFg = hex("#fabd2f")
+		navBg = helpers.Hex(ColorHexAccentDark)
+		navFg = helpers.Hex(ColorHexGruvboxPrimary)
 	}
 
 	// Create custom Select widget with all view modes (no press highlight)
@@ -252,27 +231,27 @@ func (mw *MainWindow) setupUI() {
 
 	// Wrap Select in styled container with white background for light theme
 	var selectBg color.Color
-	if _, ok := currentTheme.(*LightSoftTheme); ok {
+	if isLightTheme {
 		selectBg = color.White
 	} else {
-		selectBg = hex("#3c3836")
+		selectBg = helpers.Hex(ColorHexGruvboxSurface)
 	}
-	selectWrapper := CreateStyledSelect(mw.viewSelect, selectBg, fyne.NewSize(180, 44), 8)
+	selectWrapper := CreateStyledSelect(mw.viewSelect, selectBg, fyne.NewSize(180, ButtonHeight), BorderRadius)
 
-	mw.prevRectBtn = NewSimpleRectButton("←", navBg, navFg, fyne.NewSize(44, 44), 8, mw.onPrevDayClicked)
-	mw.nextRectBtn = NewSimpleRectButton("→", navBg, navFg, fyne.NewSize(44, 44), 8, mw.onNextDayClicked)
+	mw.prevRectBtn = NewSimpleRectButton("←", navBg, navFg, fyne.NewSize(ButtonHeight, ButtonHeight), BorderRadius, mw.onPrevDayClicked)
+	mw.nextRectBtn = NewSimpleRectButton("→", navBg, navFg, fyne.NewSize(ButtonHeight, ButtonHeight), BorderRadius, mw.onNextDayClicked)
 
 	// Add button (circular, replaces Pomodoro in top controls)
 	addButtonRounded := RoundedIconButton(theme.ContentAddIcon(), mw.onAddButtonClicked)
-	addWrapTop := container.NewGridWrap(fyne.NewSize(44, 44), addButtonRounded)
+	addWrapTop := container.NewGridWrap(fyne.NewSize(ButtonHeight, ButtonHeight), addButtonRounded)
 
 	controls := container.NewHBox(
 		selectWrapper,
-		CreateSpacer(10, 1),
+		helpers.CreateSpacer(10, 1),
 		mw.prevRectBtn,
-		CreateSpacer(2, 1),
+		helpers.CreateSpacer(2, 1),
 		mw.nextRectBtn,
-		CreateSpacer(10, 1),
+		helpers.CreateSpacer(10, 1),
 		addWrapTop,
 	)
 
@@ -283,24 +262,24 @@ func (mw *MainWindow) setupUI() {
 	// Create main content tasks container strictly per mockup
 	timelineCard := CreateTasksContainer(mw.timeline)
 	// Horizontal padding 24px for header and controls, top padding 30px
-	headerPadded := container.NewBorder(nil, nil, CreateSpacer(24, 1), CreateSpacer(24, 1), header)
-	controlsPadded := container.NewBorder(nil, nil, CreateSpacer(24, 1), CreateSpacer(24, 1), controls)
-	timelinePadded := container.NewBorder(nil, nil, CreateSpacer(24, 1), CreateSpacer(24, 1), timelineCard)
+	headerPadded := container.NewBorder(nil, nil, helpers.CreateSpacer(24, 1), helpers.CreateSpacer(24, 1), header)
+	controlsPadded := container.NewBorder(nil, nil, helpers.CreateSpacer(24, 1), helpers.CreateSpacer(24, 1), controls)
+	timelinePadded := container.NewBorder(nil, nil, helpers.CreateSpacer(24, 1), helpers.CreateSpacer(24, 1), timelineCard)
 
 	// Build header section (fixed at top)
 	headerArea := container.NewVBox(
-		CreateSpacer(1, 15), // Reduced from 30px to 15px (2x smaller)
+		helpers.CreateSpacer(1, 15), // Reduced from 30px to 15px (2x smaller)
 		headerPadded,
-		CreateSpacer(1, 30),
+		helpers.CreateSpacer(1, 30),
 		controlsPadded,
-		CreateSpacer(1, 30),
+		helpers.CreateSpacer(1, 30),
 	)
 	topSection := headerArea
 
 	// Use Border layout to make timeline fill remaining space, with bottom margin for add button
 	appBody := container.NewBorder(
 		topSection,          // top: header + controls
-		CreateSpacer(1, 24), // bottom: 24px margin (space for add button which floats)
+		helpers.CreateSpacer(1, 24), // bottom: 24px margin (space for add button which floats)
 		nil, nil,            // left, right
 		timelinePadded, // center: timeline fills remaining vertical space
 	)
@@ -370,32 +349,7 @@ func (mw *MainWindow) loadTodos() {
 	mw.todos = mw.viewMode.FilterItems(dailyTodos, currentTime)
 
 	// Sort daily todos by implicit Order (if set), then by time (newest first)
-	sort.SliceStable(mw.todos, func(i, j int) bool {
-		a := mw.todos[i]
-		b := mw.todos[j]
-		// If both have no explicit order, fallback to time desc
-		if a.Order == 0 && b.Order == 0 {
-			if a.TodoTime.Equal(b.TodoTime) {
-				return a.Name < b.Name
-			}
-			return a.TodoTime.After(b.TodoTime)
-		}
-		// Items with explicit order go before those without
-		if a.Order == 0 {
-			return false
-		}
-		if b.Order == 0 {
-			return true
-		}
-		if a.Order != b.Order {
-			return a.Order < b.Order
-		}
-		// Tie-breaker: time desc
-		if a.TodoTime.Equal(b.TodoTime) {
-			return a.Name < b.Name
-		}
-		return a.TodoTime.After(b.TodoTime)
-	})
+	models.SortTodosByOrder(mw.todos)
 }
 
 // refreshView updates the UI display
@@ -513,29 +467,7 @@ func (mw *MainWindow) onTodoReorder(todo *models.TodoItem, delta int) {
 	}
 
 	// Sort by current visible rule (Order then time desc)
-	sort.SliceStable(dayTodos, func(i, j int) bool {
-		a := dayTodos[i]
-		b := dayTodos[j]
-		if a.Order == 0 && b.Order == 0 {
-			if a.TodoTime.Equal(b.TodoTime) {
-				return a.Name < b.Name
-			}
-			return a.TodoTime.After(b.TodoTime)
-		}
-		if a.Order == 0 {
-			return false
-		}
-		if b.Order == 0 {
-			return true
-		}
-		if a.Order != b.Order {
-			return a.Order < b.Order
-		}
-		if a.TodoTime.Equal(b.TodoTime) {
-			return a.Name < b.Name
-		}
-		return a.TodoTime.After(b.TodoTime)
-	})
+	models.SortTodosByOrder(dayTodos)
 
 	// Find index of the item using pointer comparison for exact match
 	// This ensures we find the exact same instance even if Order was already modified
@@ -591,29 +523,7 @@ func (mw *MainWindow) onTodoReorder(todo *models.TodoItem, delta int) {
 	}
 
 	// Immediate UI update without disk IO: reorder visible list by new Orders
-	sort.SliceStable(mw.todos, func(i, j int) bool {
-		a := mw.todos[i]
-		b := mw.todos[j]
-		if a.Order == 0 && b.Order == 0 {
-			if a.TodoTime.Equal(b.TodoTime) {
-				return a.Name < b.Name
-			}
-			return a.TodoTime.After(b.TodoTime)
-		}
-		if a.Order == 0 {
-			return false
-		}
-		if b.Order == 0 {
-			return true
-		}
-		if a.Order != b.Order {
-			return a.Order < b.Order
-		}
-		if a.TodoTime.Equal(b.TodoTime) {
-			return a.Name < b.Name
-		}
-		return a.TodoTime.After(b.TodoTime)
-	})
+	models.SortTodosByOrder(mw.todos)
 	mw.timeline.SetTodos(mw.todos)
 	mw.timeline.Refresh()
 }
@@ -631,22 +541,21 @@ func (mw *MainWindow) onReorderFinished() {
 // setupBottomButtons creates the bottom button layout with Pomodoro and theme buttons
 func (mw *MainWindow) setupBottomButtons() fyne.CanvasObject {
 	// Get theme colors
-	currentTheme := fyne.CurrentApp().Settings().Theme()
 	var themeBg, themeFg, pomodoroBg, pomodoroFg color.Color
-	if _, ok := currentTheme.(*LightSoftTheme); ok {
-		themeBg = hex("#ff8c42")
+	if helpers.IsLightTheme() {
+		themeBg = helpers.Hex(ColorHexAccentLight)
 		themeFg = color.White
-		pomodoroBg = hex("#ff8c42")
+		pomodoroBg = helpers.Hex(ColorHexAccentLight)
 		pomodoroFg = color.White
 	} else {
-		themeBg = hex("#504945")
-		themeFg = hex("#fabd2f")
-		pomodoroBg = hex("#504945")
-		pomodoroFg = hex("#fabd2f")
+		themeBg = helpers.Hex(ColorHexAccentDark)
+		themeFg = helpers.Hex(ColorHexGruvboxPrimary)
+		pomodoroBg = helpers.Hex(ColorHexAccentDark)
+		pomodoroFg = helpers.Hex(ColorHexGruvboxPrimary)
 	}
 
 	// Pomodoro button on the left (100x44px)
-	mw.pomodoroRectBtn = NewSimpleRectButton("Pomodoro", pomodoroBg, pomodoroFg, fyne.NewSize(100, 44), 8, mw.onPomodoroTopClicked)
+	mw.pomodoroRectBtn = NewSimpleRectButton("Pomodoro", pomodoroBg, pomodoroFg, fyne.NewSize(100, ButtonHeight), BorderRadius, mw.onPomodoroTopClicked)
 
 	// Theme toggle button on the right (with text)
 	themeLabel := "Dark"
@@ -657,20 +566,20 @@ func (mw *MainWindow) setupBottomButtons() fyne.CanvasObject {
 	}
 
 	// Create theme button as SimpleRectButton
-	mw.themeRectBtn = NewSimpleRectButton(themeLabel, themeBg, themeFg, fyne.NewSize(100, 44), 8, mw.onThemeToggleClicked)
+	mw.themeRectBtn = NewSimpleRectButton(themeLabel, themeBg, themeFg, fyne.NewSize(100, ButtonHeight), BorderRadius, mw.onThemeToggleClicked)
 
 	// Create bottom button layout: theme on left, pomodoro on right with padding
 	bottomButtons := container.NewBorder(
 		nil, nil,
-		container.NewBorder(nil, nil, CreateSpacer(25, 1), nil, mw.themeRectBtn),    // 25px left margin
-		container.NewBorder(nil, nil, nil, CreateSpacer(25, 1), mw.pomodoroRectBtn), // 25px right margin
+		container.NewBorder(nil, nil, helpers.CreateSpacer(25, 1), nil, mw.themeRectBtn),    // 25px left margin
+		container.NewBorder(nil, nil, nil, helpers.CreateSpacer(25, 1), mw.pomodoroRectBtn), // 25px right margin
 		canvas.NewRectangle(color.Transparent),                                      // center placeholder
 	)
 
 	// Place spacer BELOW the buttons to lift them up from the bottom edge
 	return container.NewVBox(
 		bottomButtons,
-		CreateSpacer(1, 10),
+		helpers.CreateSpacer(1, 10),
 	)
 }
 
@@ -712,18 +621,7 @@ func (mw *MainWindow) loadConfig() {
 	}
 
 	// Apply view mode
-	switch config.GetViewMode() {
-	case "all":
-		mw.viewMode = models.ViewAll
-	case "incomplete":
-		mw.viewMode = models.ViewIncomplete
-	case "complete":
-		mw.viewMode = models.ViewComplete
-	case "starred":
-		mw.viewMode = models.ViewStarred
-	default:
-		mw.viewMode = models.ViewIncomplete
-	}
+	mw.viewMode = models.ViewModeFromString(config.GetViewMode())
 
 	// Apply current date
 	if !config.GetCurrentDate().IsZero() {
@@ -740,19 +638,7 @@ func (mw *MainWindow) saveConfig() {
 		mw.config.SetTheme("light")
 	}
 
-	// Map ViewMode to string
-	viewModeStr := "incomplete"
-	switch mw.viewMode {
-	case models.ViewAll:
-		viewModeStr = "all"
-	case models.ViewIncomplete:
-		viewModeStr = "incomplete"
-	case models.ViewComplete:
-		viewModeStr = "complete"
-	case models.ViewStarred:
-		viewModeStr = "starred"
-	}
-	mw.config.SetViewMode(viewModeStr)
+	mw.config.SetViewMode(mw.viewMode.String())
 
 	mw.config.SetCurrentDate(mw.currentDate)
 

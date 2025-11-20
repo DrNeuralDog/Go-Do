@@ -10,6 +10,7 @@ import (
 	"godo/src/localization"
 	"godo/src/models"
 	"godo/src/persistence"
+	"godo/src/ui/helpers"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -24,7 +25,7 @@ import (
 type TodoForm struct {
 	parentWindow fyne.Window // Main application window (for dialogs)
 	formWindow   fyne.Window // Current form window (for standalone windows)
-	dataManager  *persistence.MonthlyManager
+	dataManager  persistence.TodoRepository
 
 	// Form fields
 	nameEntry      *widget.Entry
@@ -55,7 +56,7 @@ type TodoForm struct {
 }
 
 // NewTodoForm creates a new todo form dialog
-func NewTodoForm(window fyne.Window, dataManager *persistence.MonthlyManager) *TodoForm {
+func NewTodoForm(window fyne.Window, dataManager persistence.TodoRepository) *TodoForm {
 	tf := &TodoForm{
 		parentWindow: window,
 		dataManager:  dataManager,
@@ -718,7 +719,7 @@ func newVSpacer(height float32) fyne.CanvasObject {
 func (tf *TodoForm) makeCancelButton(text string, onTap func()) fyne.CanvasObject {
 	bg := theme.Color(theme.ColorNameBackground)
 	n := color.NRGBAModel.Convert(bg).(color.NRGBA)
-	light := tf.lighten(n, 0.20)
+	light := helpers.Lighten(n, 0.20)
 	fg := theme.Color(theme.ColorNameForeground)
 	fn := color.NRGBAModel.Convert(fg).(color.NRGBA)
 	btn := &rectButton{
@@ -747,20 +748,6 @@ func (tf *TodoForm) makePrimaryButton(text string, onTap func()) fyne.CanvasObje
 	}
 	btn.ExtendBaseWidget(btn)
 	return btn
-}
-
-// helpers for color ops
-func (tf *TodoForm) lighten(c color.NRGBA, amount float32) color.NRGBA {
-	if amount < 0 {
-		amount = 0
-	}
-	if amount > 1 {
-		amount = 1
-	}
-	mix := func(v uint8) uint8 {
-		return uint8(float32(v)*(1-amount) + 255*amount)
-	}
-	return color.NRGBA{R: mix(c.R), G: mix(c.G), B: mix(c.B), A: c.A}
 }
 
 // rectButton is a minimal custom button used for Cancel styling

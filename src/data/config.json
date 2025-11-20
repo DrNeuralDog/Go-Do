@@ -1,8 +1,8 @@
 {
   "version": "1.0",
   "ui": {
-    "theme": "light",
-    "viewMode": "incomplete",
+    "theme": "dark",
+    "viewMode": "starred",
     "currentDate": "2025-11-19T21:42:07.0350302+03:00",
     "windowWidth": 420,
     "windowHeight": 800

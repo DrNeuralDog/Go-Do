@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"godo/src/models"
+	"godo/src/ui/helpers"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -73,7 +74,7 @@ func NewPomodoroWindow(app fyne.App, isGruvbox bool) *PomodoroWindow {
 // setupUI initializes the user interface
 func (pw *PomodoroWindow) setupUI() {
 	// Window properties will be set after animation
-	// pw.window.Resize(fyne.NewSize(200, 350))
+	// pw.window.Resize(fyne.NewSize(PomodoroWindowWidth, PomodoroWindowHeight))
 	// pw.window.SetFixedSize(true)
 	// pw.window.CenterOnScreen()
 
@@ -81,15 +82,16 @@ func (pw *PomodoroWindow) setupUI() {
 	var bgStart, bgEnd color.Color
 	var titleColor color.Color
 	currentTheme := fyne.CurrentApp().Settings().Theme()
-	if lightTheme, ok := currentTheme.(*LightSoftTheme); ok {
-		bgStart, bgEnd = lightTheme.GetHeaderGradientColors()
-		titleColor = color.White
-	} else if gruv, ok := currentTheme.(*GruvboxBlackTheme); ok {
-		bgStart, bgEnd = gruv.GetHeaderGradientColors()
-		titleColor = hex("#fabd2f")
+	isLightTheme := helpers.IsLightTheme()
+	if gradientTheme, ok := currentTheme.(interface{ GetHeaderGradientColors() (color.Color, color.Color) }); ok {
+		bgStart, bgEnd = gradientTheme.GetHeaderGradientColors()
 	} else {
-		bgStart = bgEnd // fallback
-		titleColor = color.White
+		bgStart = helpers.GetBackgroundColor()
+		bgEnd = bgStart
+	}
+	titleColor = color.White
+	if !isLightTheme {
+		titleColor = helpers.Hex("#fabd2f")
 	}
 
 	// Timer display - big digits, themed color
@@ -107,12 +109,12 @@ func (pw *PomodoroWindow) setupUI() {
 
 	// Control buttons (match theme button styles from main window)
 	var btnBg, btnFg color.Color
-	if _, ok := fyne.CurrentApp().Settings().Theme().(*LightSoftTheme); ok {
-		btnBg = hex("#ff8c42")
+	if isLightTheme {
+		btnBg = helpers.Hex("#ff8c42")
 		btnFg = color.White
 	} else {
-		btnBg = hex("#504945")
-		btnFg = hex("#fabd2f")
+		btnBg = helpers.Hex("#504945")
+		btnFg = helpers.Hex("#fabd2f")
 	}
 	pw.startBtn = NewSimpleRectButton("Start", btnBg, btnFg, fyne.NewSize(90, 36), 8, pw.onStartClicked)
 	pw.pauseBtn = NewSimpleRectButton("Pause", btnBg, btnFg, fyne.NewSize(90, 36), 8, pw.onPauseClicked)
@@ -140,7 +142,7 @@ func (pw *PomodoroWindow) setupUI() {
 	labelLong.TextSize = 16
 	labelLong.TextStyle = fyne.TextStyle{Bold: true}
 
-	darkText := hex("#3c3836")
+	darkText := helpers.Hex("#3c3836")
 	whiteBg := color.White
 
 	pw.workSpinner = NewNumberSpinner(pw.window, pw.config.WorkDuration, 1, 120, 1, darkText, whiteBg, func(v int) {
@@ -158,13 +160,13 @@ func (pw *PomodoroWindow) setupUI() {
 	spinnerVerticalOffset := pw.workSpinner.MinSize().Height * 0.2
 	wrapSpinner := func(spinner *NumberSpinner) fyne.CanvasObject {
 		return container.NewVBox(
-			CreateSpacer(1, spinnerVerticalOffset),
+			helpers.CreateSpacer(1, spinnerVerticalOffset),
 			spinner,
 		)
 	}
 	configForm := container.NewVBox(
 		container.NewCenter(cfgHeader),
-		CreateSpacer(1, 7),
+		helpers.CreateSpacer(1, 7),
 		container.NewGridWithColumns(2,
 			labelWork,
 			wrapSpinner(pw.workSpinner),
@@ -181,10 +183,10 @@ func (pw *PomodoroWindow) setupUI() {
 
 	// Progress ring colors
 	var tickBg color.Color
-	if _, ok := currentTheme.(*LightSoftTheme); ok {
+	if isLightTheme {
 		tickBg = color.White
 	} else {
-		tickBg = hex("#504945")
+		tickBg = helpers.Hex("#504945")
 	}
 	pw.progressRing = NewProgressRing(tickBg)
 
@@ -198,7 +200,7 @@ func (pw *PomodoroWindow) setupUI() {
 	ringContainer := container.NewCenter(container.NewGridWrap(fyne.NewSize(250, 270), ringWithDigits))
 	labelsBlock := container.NewVBox(
 		container.NewCenter(pw.stateCanvas),
-		CreateSpacer(1, 33),
+		helpers.CreateSpacer(1, 33),
 		container.NewCenter(pw.sessionsCanvas),
 	)
 	labelHeight := labelsBlock.MinSize().Height
@@ -211,34 +213,34 @@ func (pw *PomodoroWindow) setupUI() {
 	// Overlay labels so they sit 30px closer to the ring without altering container height.
 	stackBase := container.NewVBox(
 		ringContainer,
-		CreateSpacer(1, labelHeight),
+		helpers.CreateSpacer(1, labelHeight),
 	)
 	labelOverlay := container.NewVBox(
-		CreateSpacer(1, spacerBeforeLabels),
+		helpers.CreateSpacer(1, spacerBeforeLabels),
 		labelsBlock,
 	)
 	ringAndLabels := container.NewStack(stackBase, labelOverlay)
 
 	timerDisplay := container.NewVBox(
 		ringAndLabels,
-		CreateSpacer(1, 0), // ещё на ~20px ближе кнопки к индикатору
+		helpers.CreateSpacer(1, 0), // ещё на ~20px ближе кнопки к индикатору
 		container.NewCenter(buttonRow),
-		CreateSpacer(1, 40),
+		helpers.CreateSpacer(1, 40),
 	)
 
 	content := container.NewVBox(
 		timerDisplay,
-		CreateFixedSeparator(),
-		CreateSpacer(1, 20),
+		helpers.CreateFixedSeparator(),
+		helpers.CreateSpacer(1, 20),
 		configForm,
-		CreateSpacer(1, 20),
+		helpers.CreateSpacer(1, 20),
 	)
 
 	// Wrap in padding (24px left/right, 10px top)
 	paddedContent := container.NewBorder(
-		CreateSpacer(1, 50), nil,
-		CreateSpacer(24, 1),
-		CreateSpacer(24, 1),
+		helpers.CreateSpacer(1, 50), nil,
+		helpers.CreateSpacer(ButtonPadding, 1),
+		helpers.CreateSpacer(ButtonPadding, 1),
 		content,
 	)
 
@@ -248,7 +250,7 @@ func (pw *PomodoroWindow) setupUI() {
 
 	pw.window.SetContent(finalContent)
 	pw.window.SetFixedSize(true)
-	pw.window.Resize(fyne.NewSize(200, 350))
+	pw.window.Resize(fyne.NewSize(PomodoroWindowWidth, PomodoroWindowHeight))
 	pw.window.CenterOnScreen()
 	pw.window.Show()
 }
@@ -400,8 +402,8 @@ func NewProgressRing(bg color.Color) *ProgressRing {
 		Progress:    0,
 		Segments:    60,
 		StartAngle:  math.Pi,        // start from left side
-		StartColor:  hex("#d65c5c"), // Red-orange - start (0% progress, warning state)
-		EndColor:    hex("#a4d868"), // Bright vibrant green - end (100% progress, complete)
+		StartColor:  helpers.Hex("#d65c5c"), // Red-orange - start (0% progress, warning state)
+		EndColor:    helpers.Hex("#a4d868"), // Bright vibrant green - end (100% progress, complete)
 		BgColor:     bg,
 		InnerRatio:  1.2,
 		SegLength:   31,
@@ -678,4 +680,3 @@ func (pw *PomodoroWindow) UpdateTheme(isGruvbox bool) {
 	// Preserve timer state and refresh display
 	pw.tick()
 }
-

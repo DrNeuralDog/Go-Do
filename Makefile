@@ -20,11 +20,10 @@ BUILD_DIR=bin
 
 all: deps test build
 
-# Build for current platform
+# Build for current platform (Windows exe with embedded icon)
 build:
-	@echo "Building for current platform..."
-	@powershell -NoProfile -Command "if (-not (Test-Path '$(BUILD_DIR)')) { New-Item -ItemType Directory -Path '$(BUILD_DIR)' | Out-Null }"
-	$(GOBUILD) -o $(BUILD_DIR)/$(BINARY_WINDOWS) src/main.go
+	@echo "Building Windows executable with icon..."
+	@$(MAKE) package-windows
 
 # Build for Windows
 build-windows:

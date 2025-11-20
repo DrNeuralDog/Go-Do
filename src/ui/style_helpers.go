@@ -13,53 +13,9 @@ import (
 	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+
+	"godo/src/ui/helpers"
 )
-
-// CreateSpacer returns an invisible spacer with fixed size.
-func CreateSpacer(width float32, height float32) fyne.CanvasObject {
-	r := canvas.NewRectangle(color.NRGBA{R: 0, G: 0, B: 0, A: 0})
-	return container.NewGridWrap(fyne.NewSize(width, height), r)
-}
-
-// CreateFixedSeparator returns a horizontal line with fixed color,
-// so it remains visible and does not change when the app theme changes.
-func CreateFixedSeparator() fyne.CanvasObject {
-	rect := canvas.NewRectangle(hex("#bdae93")) // warm light line, readable on dark background
-	rect.SetMinSize(fyne.NewSize(1, 1))
-	return rect
-}
-
-// CreateChipStyle wraps the given object in a rounded, lightly tinted background
-// to create a compact "chip" appearance.
-func CreateChipStyle(obj fyne.CanvasObject) fyne.CanvasObject {
-	bg := canvas.NewRectangle(toNRGBA(theme.Color(theme.ColorNameHover)))
-	bg.CornerRadius = 10
-	// Increase opacity slightly for visibility
-	c := toNRGBA(bg.FillColor)
-	c.A = 200
-	bg.FillColor = c
-
-	// Optional subtle border using separator color
-	sep := toNRGBA(theme.Color(theme.ColorNameSeparator))
-	sep.A = 255 // Full opacity for visibility
-	bg.StrokeColor = sep
-	bg.StrokeWidth = 1
-
-	return container.NewMax(bg, container.NewPadded(obj))
-}
-
-// CreateCardStyle wraps content in a rounded card with padding and subtle border.
-func CreateCardStyle(obj fyne.CanvasObject) fyne.CanvasObject {
-	bg := canvas.NewRectangle(toNRGBA(theme.Color(theme.ColorNameInputBackground)))
-	bg.CornerRadius = 12
-
-	sep := toNRGBA(theme.Color(theme.ColorNameSeparator))
-	sep.A = 255 // Full opacity for visibility
-	bg.StrokeColor = sep
-	bg.StrokeWidth = 1
-
-	return container.NewMax(bg, container.NewPadded(obj))
-}
 
 // RoundedIconButton creates a circular accent button with a centered icon.
 func RoundedIconButton(icon fyne.Resource, tapped func()) fyne.CanvasObject {
@@ -79,8 +35,8 @@ type RoundIconButton struct {
 func NewRoundIconButton(icon fyne.Resource, onTap func()) *RoundIconButton {
 	b := &RoundIconButton{
 		Icon:     icon,
-		Bg:       toNRGBA(theme.Color(theme.ColorNamePrimary)),
-		Fg:       toNRGBA(theme.Color(theme.ColorNameForeground)),
+		Bg:       helpers.ToNRGBA(theme.Color(theme.ColorNamePrimary)),
+		Fg:       helpers.ToNRGBA(theme.Color(theme.ColorNameForeground)),
 		OnTapped: onTap,
 	}
 	b.ExtendBaseWidget(b)
@@ -88,7 +44,7 @@ func NewRoundIconButton(icon fyne.Resource, onTap func()) *RoundIconButton {
 }
 
 func (b *RoundIconButton) CreateRenderer() fyne.WidgetRenderer {
-	circle := canvas.NewCircle(toNRGBA(b.Bg))
+	circle := canvas.NewCircle(helpers.ToNRGBA(b.Bg))
 	icon := widget.NewIcon(b.Icon)
 	cont := container.NewMax(circle, container.NewCenter(icon))
 	return &roundIconButtonRenderer{
@@ -112,9 +68,9 @@ func (r *roundIconButtonRenderer) BackgroundColor() fyne.ThemeColorName { return
 func (r *roundIconButtonRenderer) Objects() []fyne.CanvasObject         { return []fyne.CanvasObject{r.cont} }
 func (r *roundIconButtonRenderer) Destroy()                             {}
 func (r *roundIconButtonRenderer) Refresh() {
-	bg := toNRGBA(r.btn.Bg)
+	bg := helpers.ToNRGBA(r.btn.Bg)
 	if r.btn.hovered {
-		bg = lighten(bg, 0.12)
+		bg = helpers.Lighten(bg, 0.12)
 	}
 	r.circle.FillColor = bg
 	runOnMainThread(func() {
@@ -130,8 +86,8 @@ func (b *RoundIconButton) MinSize() fyne.Size {
 
 func (b *RoundIconButton) Tapped(*fyne.PointEvent) {
 	// quick press flash by darkening background briefly
-	orig := toNRGBA(b.Bg)
-	b.Bg = darken(orig, 0.85)
+	orig := helpers.ToNRGBA(b.Bg)
+	b.Bg = helpers.Darken(orig, 0.85)
 	runOnMainThread(func() {
 		b.Refresh()
 	})
@@ -157,43 +113,6 @@ func (b *RoundIconButton) MouseOut() {
 	b.hovered = false
 	runOnMainThread(func() { b.Refresh() })
 }
-
-// toNRGBA converts any color.Color to color.NRGBA for manipulation.
-func toNRGBA(c color.Color) color.NRGBA {
-	r, g, b, a := c.RGBA()
-	return color.NRGBA{R: uint8(r >> 8), G: uint8(g >> 8), B: uint8(b >> 8), A: uint8(a >> 8)}
-}
-
-// darken returns a darker version of the color by the provided factor (0..1)
-func darken(c color.NRGBA, factor float32) color.NRGBA {
-	if factor < 0 {
-		factor = 0
-	}
-	if factor > 1 {
-		factor = 1
-	}
-	return color.NRGBA{
-		R: uint8(float32(c.R) * factor),
-		G: uint8(float32(c.G) * factor),
-		B: uint8(float32(c.B) * factor),
-		A: c.A,
-	}
-}
-
-// lighten returns a lighter version of the color by mixing with white (0..1)
-func lighten(c color.NRGBA, amount float32) color.NRGBA {
-	if amount < 0 {
-		amount = 0
-	}
-	if amount > 1 {
-		amount = 1
-	}
-	mix := func(v uint8) uint8 {
-		return uint8(float32(v)*(1-amount) + 255*amount)
-	}
-	return color.NRGBA{R: mix(c.R), G: mix(c.G), B: mix(c.B), A: c.A}
-}
-
 // (removed old CreateGradientHeader helper; using full-screen gradient instead)
 
 // GradientRect is a custom widget that draws a vertical linear gradient.
@@ -231,8 +150,8 @@ func (r *gradientRenderer) Layout(size fyne.Size) {
 	// Clear old rects if resizing
 	r.rects = make([]*canvas.Rectangle, 0, bandCount)
 
-	start := toNRGBA(r.gradient.StartColor)
-	end := toNRGBA(r.gradient.EndColor)
+	start := helpers.ToNRGBA(r.gradient.StartColor)
+	end := helpers.ToNRGBA(r.gradient.EndColor)
 
 	for i := 0; i < bandCount; i++ {
 		// Interpolate color
@@ -306,9 +225,9 @@ func NewSimpleRectButton(text string, bg, fg color.Color, size fyne.Size, radius
 }
 
 func (b *SimpleRectButton) CreateRenderer() fyne.WidgetRenderer {
-	bg := canvas.NewRectangle(toNRGBA(b.Bg))
+	bg := canvas.NewRectangle(helpers.ToNRGBA(b.Bg))
 	bg.CornerRadius = b.Radius
-	txt := canvas.NewText(b.Text, toNRGBA(b.Fg))
+	txt := canvas.NewText(b.Text, helpers.ToNRGBA(b.Fg))
 	txt.Alignment = fyne.TextAlignCenter
 	// Make button text bold for better emphasis
 	txt.TextStyle = fyne.TextStyle{Bold: true}
@@ -340,14 +259,14 @@ func (r *simpleRectButtonRenderer) MinSize() fyne.Size {
 func (r *simpleRectButtonRenderer) Refresh() {
 	// Sync colors & text from button state
 	btn := r.button
-	bgCol := toNRGBA(btn.Bg)
-	fgCol := toNRGBA(btn.Fg)
+	bgCol := helpers.ToNRGBA(btn.Bg)
+	fgCol := helpers.ToNRGBA(btn.Fg)
 	if btn.Disabled {
 		// dim colors
-		bgCol = darken(bgCol, 0.6)
+		bgCol = helpers.Darken(bgCol, 0.6)
 		fgCol.A = 160
 	} else if btn.hovered {
-		bgCol = lighten(bgCol, 0.10)
+		bgCol = helpers.Lighten(bgCol, 0.10)
 	}
 	r.bg.FillColor = bgCol
 	r.text.Color = fgCol
@@ -380,8 +299,8 @@ func (b *SimpleRectButton) Tapped(*fyne.PointEvent) {
 		return
 	}
 	// flash background on press
-	orig := toNRGBA(b.Bg)
-	b.Bg = darken(orig, 0.85)
+	orig := helpers.ToNRGBA(b.Bg)
+	b.Bg = helpers.Darken(orig, 0.85)
 	runOnMainThread(func() {
 		b.Refresh()
 	})
@@ -465,10 +384,10 @@ func NewCustomSelect(options []string, onChanged func(string)) *CustomSelect {
 	currentTheme := fyne.CurrentApp().Settings().Theme()
 	if _, ok := currentTheme.(*LightSoftTheme); ok {
 		// Light theme: use dark text for visibility on white background
-		cs.TextColor = hex("#3c3836") // Gruvbox dark gray
+		cs.TextColor = helpers.Hex("#3c3836") // Gruvbox dark gray
 	} else {
 		// Dark theme: use light text
-		cs.TextColor = hex("#ebdbb2") // Gruvbox light
+		cs.TextColor = helpers.Hex("#ebdbb2") // Gruvbox light
 	}
 
 	cs.ExtendBaseWidget(cs)
@@ -487,7 +406,7 @@ func (cs *CustomSelect) MinSize() fyne.Size {
 }
 
 func (cs *CustomSelect) CreateRenderer() fyne.WidgetRenderer {
-	text := canvas.NewText(cs.Selected, toNRGBA(cs.TextColor))
+	text := canvas.NewText(cs.Selected, helpers.ToNRGBA(cs.TextColor))
 	text.Alignment = fyne.TextAlignLeading
 	text.TextSize = 14
 
@@ -530,10 +449,10 @@ func (r *customSelectRenderer) Refresh() {
 	currentTheme := fyne.CurrentApp().Settings().Theme()
 	if _, ok := currentTheme.(*LightSoftTheme); ok {
 		// Light theme: use dark text for visibility on white background
-		r.text.Color = toNRGBA(hex("#3c3836")) // Dark gray text
+		r.text.Color = helpers.ToNRGBA(helpers.Hex("#3c3836")) // Dark gray text
 	} else {
 		// Dark theme: use light text
-		r.text.Color = toNRGBA(hex("#ebdbb2")) // Light text
+		r.text.Color = helpers.ToNRGBA(helpers.Hex("#ebdbb2")) // Light text
 	}
 
 	// hover / press overlay (theme-aware)
@@ -634,7 +553,7 @@ func (cs *CustomSelect) MouseOut() {
 // CreateStyledSelect wraps a Select widget in a rounded container with custom background
 // Accepts any CanvasObject (including widget.Select and CustomSelect)
 func CreateStyledSelect(selectWidget fyne.CanvasObject, bgColor color.Color, size fyne.Size, radius float32) fyne.CanvasObject {
-	bg := canvas.NewRectangle(toNRGBA(bgColor))
+	bg := canvas.NewRectangle(helpers.ToNRGBA(bgColor))
 	bg.CornerRadius = radius
 
 	// Wrap select in container with fixed size
@@ -778,7 +697,7 @@ func CreateTasksContainer(content fyne.CanvasObject) fyne.CanvasObject {
 		// Dark theme: force solid background (no gradient) using theme base background
 		bgColor = theme.Color(theme.ColorNameBackground)
 	}
-	rect := canvas.NewRectangle(toNRGBA(bgColor))
+	rect := canvas.NewRectangle(helpers.ToNRGBA(bgColor))
 	rect.CornerRadius = 12
 	// Use custom padding to control exact spacing - 8px all around instead of default Fyne padding
 	padded := container.NewPadded(content)
@@ -855,16 +774,16 @@ func (ns *NumberSpinner) MinSize() fyne.Size {
 
 func (ns *NumberSpinner) CreateRenderer() fyne.WidgetRenderer {
 	// background (white by requirement)
-	bg := canvas.NewRectangle(toNRGBA(ns.BgColor))
+	bg := canvas.NewRectangle(helpers.ToNRGBA(ns.BgColor))
 	bg.CornerRadius = 8
 	// subtle border to mimic input field look
-	sep := toNRGBA(theme.Color(theme.ColorNameSeparator))
+	sep := helpers.ToNRGBA(theme.Color(theme.ColorNameSeparator))
 	sep.A = 255
 	bg.StrokeColor = sep
 	bg.StrokeWidth = 1
 
 	// display value text - STORE THIS IN RENDERER
-	txt := canvas.NewText(fmt.Sprintf("%d", ns.Value), toNRGBA(ns.TextColor))
+	txt := canvas.NewText(fmt.Sprintf("%d", ns.Value), helpers.ToNRGBA(ns.TextColor))
 	txt.TextSize = 16
 	txt.Alignment = fyne.TextAlignLeading
 
@@ -878,7 +797,7 @@ func (ns *NumberSpinner) CreateRenderer() fyne.WidgetRenderer {
 	)
 
 	// left padding for text
-	textPadded := container.NewBorder(nil, nil, CreateSpacer(12, 1), nil, container.NewCenter(txt))
+	textPadded := container.NewBorder(nil, nil, helpers.CreateSpacer(12, 1), nil, container.NewCenter(txt))
 
 	content := container.NewBorder(nil, nil, nil, upDown, textPadded)
 	stack := container.NewStack(bg, content)
