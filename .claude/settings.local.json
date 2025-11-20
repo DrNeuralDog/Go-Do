@@ -24,7 +24,9 @@
       "Bash(make build-macos:*)",
       "Bash(go help:*)",
       "Bash(findstr:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(mkdir:*)",
+      "Bash(tasklist /FI 'IMAGENAME eq GoDo.exe' 2)"
     ],
     "deny": [],
     "ask": []
