@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Go DO - Productivity Animation</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 900px;
+            width: 100%;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 40px;
+            font-size: 1.1em;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin-bottom: 30px;
+        }
+
+        .chart {
+            position: relative;
+            height: 100%;
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-around;
+            padding: 20px;
+            border-left: 3px solid #ddd;
+            border-bottom: 3px solid #ddd;
+        }
+
+        .bar-group {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0 20px;
+            position: relative;
+        }
+
+        .bar {
+            width: 100px;
+            background: linear-gradient(180deg, #ff6b6b 0%, #ff8787 100%);
+            border-radius: 10px 10px 0 0;
+            position: relative;
+            transition: height 1s ease-out;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            padding-bottom: 10px;
+        }
+
+        .bar.with-godo {
+            background: linear-gradient(180deg, #4ecdc4 0%, #6ee7df 100%);
+        }
+
+        .bar-value {
+            position: absolute;
+            top: -30px;
+            font-weight: bold;
+            font-size: 1.5em;
+            color: #333;
+        }
+
+        .bar-label {
+            margin-top: 15px;
+            text-align: center;
+            font-weight: 600;
+            color: #555;
+        }
+
+        .tasks-container {
+            position: absolute;
+            bottom: 10px;
+            width: 80px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 3px;
+            justify-content: center;
+        }
+
+        .task-icon {
+            width: 12px;
+            height: 12px;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 2px;
+            opacity: 0;
+            animation: fadeIn 0.3s ease-out forwards;
+        }
+
+        @keyframes fadeIn {
+            to {
+                opacity: 1;
+                transform: scale(1.1) translateY(-2px);
+            }
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 40px;
+            padding-top: 30px;
+            border-top: 2px solid #eee;
+        }
+
+        .stat-card {
+            text-align: center;
+            padding: 20px;
+            border-radius: 15px;
+            background: #f8f9fa;
+            flex: 1;
+            margin: 0 10px;
+            animation: pulse 2s infinite;
+        }
+
+        .stat-card.highlight {
+            background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+            border: 2px solid #667eea;
+        }
+
+        .stat-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stat-label {
+            color: #666;
+            margin-top: 10px;
+        }
+
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            margin-bottom: 20px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .legend-color {
+            width: 30px;
+            height: 15px;
+            border-radius: 3px;
+        }
+
+        .legend-color.without {
+            background: linear-gradient(90deg, #ff6b6b 0%, #ff8787 100%);
+        }
+
+        .legend-color.with {
+            background: linear-gradient(90deg, #4ecdc4 0%, #6ee7df 100%);
+        }
+
+        .floating-emoji {
+            position: absolute;
+            font-size: 30px;
+            animation: float 3s ease-in-out infinite;
+            pointer-events: none;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            50% { transform: translateY(-20px) rotate(10deg); }
+        }
+
+        .emoji1 { top: 20px; right: 20px; animation-delay: 0s; }
+        .emoji2 { top: 60px; left: 30px; animation-delay: 1s; }
+        .emoji3 { bottom: 100px; right: 50px; animation-delay: 2s; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="floating-emoji emoji1">🚀</div>
+        <div class="floating-emoji emoji2">✨</div>
+        <div class="floating-emoji emoji3">💪</div>
+        
+        <h1>Go DO</h1>
+        <div class="subtitle">Transform Your Productivity - Stop Scattered, Start Structured!</div>
+        
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color without"></div>
+                <span>Without Go DO (Scattered)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color with"></div>
+                <span>With Go DO (Structured)</span>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <div class="chart">
+                <div class="bar-group">
+                    <div class="bar-value" id="value1">0</div>
+                    <div class="bar" id="bar1" style="height: 0">
+                        <div class="tasks-container" id="tasks1"></div>
+                    </div>
+                    <div class="bar-label">Day 1-3<br>Without Go DO</div>
+                </div>
+                
+                <div class="bar-group">
+                    <div class="bar-value" id="value2">0</div>
+                    <div class="bar with-godo" id="bar2" style="height: 0">
+                        <div class="tasks-container" id="tasks2"></div>
+                    </div>
+                    <div class="bar-label">Day 1-3<br>With Go DO</div>
+                </div>
+                
+                <div class="bar-group">
+                    <div class="bar-value" id="value3">0</div>
+                    <div class="bar" id="bar3" style="height: 0">
+                        <div class="tasks-container" id="tasks3"></div>
+                    </div>
+                    <div class="bar-label">Week Total<br>Without Go DO</div>
+                </div>
+                
+                <div class="bar-group">
+                    <div class="bar-value" id="value4">0</div>
+                    <div class="bar with-godo" id="bar4" style="height: 0">
+                        <div class="tasks-container" id="tasks4"></div>
+                    </div>
+                    <div class="bar-label">Week Total<br>With Go DO</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-value" id="efficiency">0%</div>
+                <div class="stat-label">Time Wasted (Scattered)</div>
+            </div>
+            <div class="stat-card highlight">
+                <div class="stat-value" id="productivity">0x</div>
+                <div class="stat-label">Productivity Boost</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="focus">0%</div>
+                <div class="stat-label">Focus Improvement</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Animation values
+        const data = {
+            withoutDay: 3,
+            withDay: 7,
+            withoutWeek: 8,
+            withWeek: 21
+        };
+
+        function animateValue(id, start, end, duration, suffix = '') {
+            const element = document.getElementById(id);
+            const increment = (end - start) / (duration / 16);
+            let current = start;
+            
+            const timer = setInterval(() => {
+                current += increment;
+                if ((increment > 0 && current >= end) || (increment < 0 && current <= end)) {
+                    element.textContent = end + suffix;
+                    clearInterval(timer);
+                } else {
+                    element.textContent = Math.floor(current) + suffix;
+                }
+            }, 16);
+        }
+
+        function addTaskIcons(containerId, count) {
+            const container = document.getElementById(containerId);
+            for (let i = 0; i < count; i++) {
+                setTimeout(() => {
+                    const icon = document.createElement('div');
+                    icon.className = 'task-icon';
+                    icon.style.animationDelay = `${i * 100}ms`;
+                    container.appendChild(icon);
+                }, i * 100);
+            }
+        }
+
+        function animateChart() {
+            // Animate bars
+            setTimeout(() => {
+                document.getElementById('bar1').style.height = '120px';
+                animateValue('value1', 0, data.withoutDay, 1000, ' tasks');
+                addTaskIcons('tasks1', data.withoutDay);
+            }, 500);
+
+            setTimeout(() => {
+                document.getElementById('bar2').style.height = '200px';
+                animateValue('value2', 0, data.withDay, 1000, ' tasks');
+                addTaskIcons('tasks2', data.withDay);
+            }, 1000);
+
+            setTimeout(() => {
+                document.getElementById('bar3').style.height = '160px';
+                animateValue('value3', 0, data.withoutWeek, 1000, ' tasks');
+                addTaskIcons('tasks3', data.withoutWeek);
+            }, 1500);
+
+            setTimeout(() => {
+                document.getElementById('bar4').style.height = '320px';
+                animateValue('value4', 0, data.withWeek, 1000, ' tasks');
+                addTaskIcons('tasks4', data.withWeek);
+            }, 2000);
+
+            // Animate stats
+            setTimeout(() => {
+                animateValue('efficiency', 0, 45, 1500, '%');
+                animateValue('productivity', 0, 2.6, 1500, 'x');
+                animateValue('focus', 0, 85, 1500, '%');
+            }, 2500);
+        }
+
+        // Start animation when page loads
+        window.addEventListener('load', () => {
+            animateChart();
+            
+            // Restart animation every 10 seconds
+            setInterval(() => {
+                // Reset everything
+                document.querySelectorAll('.bar').forEach(bar => bar.style.height = '0');
+                document.querySelectorAll('.tasks-container').forEach(container => container.innerHTML = '');
+                document.querySelectorAll('.bar-value').forEach(val => val.textContent = '0');
+                document.getElementById('efficiency').textContent = '0%';
+                document.getElementById('productivity').textContent = '0x';
+                document.getElementById('focus').textContent = '0%';
+                
+                // Restart animation
+                setTimeout(animateChart, 500);
+            }, 10000);
+        });
+    </script>
+</body>
+</html>

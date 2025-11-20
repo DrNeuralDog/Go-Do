@@ -27,7 +27,9 @@ func main() {
 	}
 
 	// Run one-shot migration from TXT to YAML on startup (non-fatal)
-	_ = application.RunMigration()
+	if err := application.RunMigration(); err != nil {
+		log.Printf("Warning: Migration failed: %v", err)
+	}
 
 	// Create the main UI
 	application.CreateMainUI()

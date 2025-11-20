@@ -35,7 +35,10 @@ func init() {
 	}
 
 	// Read general app icon (used for window/taskbar icon)
-	if data, err := iconsFS.ReadFile("Icons/Icon_Work_Version.png"); err == nil {
+	// Try to load optimized 256x256 version first, fallback to full size
+	if data, err := iconsFS.ReadFile("Icons/icon_256.png"); err == nil {
+		AppIcon = fyne.NewStaticResource("app-icon.png", data)
+	} else if data, err := iconsFS.ReadFile("Icons/Icon_Work_Version.png"); err == nil {
 		AppIcon = fyne.NewStaticResource("app-icon.png", data)
 	} else {
 		log.Printf("assets: failed to load app icon: %v", err)

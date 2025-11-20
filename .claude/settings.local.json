@@ -26,7 +26,12 @@
       "Bash(findstr:*)",
       "Bash(rm:*)",
       "Bash(mkdir:*)",
-      "Bash(tasklist /FI 'IMAGENAME eq GoDo.exe' 2)"
+      "Bash(tasklist /FI 'IMAGENAME eq GoDo.exe' 2)",
+      "Bash(if not exist \"src\\ui\\widgets\" mkdir srcuiwidgets)",
+      "Bash(go install:*)",
+      "Bash(~/go/bin/go-winres make:*)",
+      "Bash(ffmpeg:*)",
+      "Bash(start:*)"
     ],
     "deny": [],
     "ask": []
