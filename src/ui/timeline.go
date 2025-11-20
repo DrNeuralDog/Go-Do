@@ -8,6 +8,7 @@ import (
 	"godo/src/localization"
 	"godo/src/models"
 	"godo/src/persistence"
+	"godo/src/ui/helpers"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -23,7 +24,7 @@ import (
 type Timeline struct {
 	widget.BaseWidget
 
-	dataManager *persistence.MonthlyManager
+	dataManager persistence.TodoRepository
 	currentDate time.Time // Changed to time.Time for daily view
 	todos       []*models.TodoItem
 	viewMode    models.ViewMode
@@ -46,13 +47,13 @@ type Timeline struct {
 }
 
 // NewTimeline creates a new timeline widget
-func NewTimeline(dataManager *persistence.MonthlyManager) *Timeline {
+func NewTimeline(dataManager persistence.TodoRepository) *Timeline {
 	t := &Timeline{
 		dataManager:    dataManager,
 		currentDate:    time.Now(), // Default to now
 		viewMode:       models.ViewAll,
 		scrollPosition: 0,
-		itemHeight:     80,
+		itemHeight:     TimelineItemHeight,
 		dateGroups:     make(map[string][]*models.TodoItem),
 		visibleItems:   make([]*models.TodoItem, 0),
 	}
@@ -210,6 +211,7 @@ func (r *timelineRenderer) createDateHeader(dateKey string) fyne.CanvasObject {
 	if err != nil {
 		return widget.NewLabel("Invalid Date")
 	}
+	isLightTheme := helpers.IsLightTheme()
 
 	// Format date header like original: "2025年10月15日 星期一   +"
 	weekdayNames := []string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}
@@ -220,7 +222,7 @@ func (r *timelineRenderer) createDateHeader(dateKey string) fyne.CanvasObject {
 
 	// Use canvas.Text to control size ~20px per mockup
 	var fg color.Color
-	if _, ok := fyne.CurrentApp().Settings().Theme().(*LightSoftTheme); ok {
+	if isLightTheme {
 		fg = color.NRGBA{R: 0x3c, G: 0x38, B: 0x36, A: 0xFF} // #3c3836
 	} else {
 		fg = color.NRGBA{R: 0xeb, G: 0xdb, B: 0xb2, A: 0xFF} // #ebdbb2
@@ -234,7 +236,7 @@ func (r *timelineRenderer) createDateHeader(dateKey string) fyne.CanvasObject {
 
 	// Divider line separating header from tasks
 	var dividerColor color.Color
-	if _, ok := fyne.CurrentApp().Settings().Theme().(*LightSoftTheme); ok {
+	if isLightTheme {
 		dividerColor = color.NRGBA{R: 0xD0, G: 0xD0, B: 0xD0, A: 0xFF}
 	} else {
 		dividerColor = color.NRGBA{R: 0x3c, G: 0x38, B: 0x36, A: 0xFF}
@@ -243,14 +245,15 @@ func (r *timelineRenderer) createDateHeader(dateKey string) fyne.CanvasObject {
 	divider.SetMinSize(fyne.NewSize(10, 1))
 
 	return container.NewVBox(
-		CreateSpacer(1, 2),
+		helpers.CreateSpacer(1, 2),
 		container.NewCenter(headerLabel),
-		CreateSpacer(1, 3),
+		helpers.CreateSpacer(1, 3),
 		divider,
 	)
 }
 
 func (r *timelineRenderer) createTodoItem(todo *models.TodoItem) fyne.CanvasObject {
+	isLightTheme := helpers.IsLightTheme()
 	// Priority indicator: colored vertical RECTANGLE 16x32px (half width, same height)
 	colorSquare := canvas.NewRectangle(todo.GetLevelColor())
 	colorSquare.CornerRadius = 2 // Sharper corners (was 6)
@@ -279,7 +282,7 @@ func (r *timelineRenderer) createTodoItem(todo *models.TodoItem) fyne.CanvasObje
 
 	// Time display - right-aligned, 18px from mockup
 	var timeColor color.Color
-	if _, ok := fyne.CurrentApp().Settings().Theme().(*LightSoftTheme); ok {
+	if isLightTheme {
 		timeColor = color.NRGBA{R: 0x66, G: 0x66, B: 0x66, A: 0xFF} // #666
 	} else {
 		timeColor = color.NRGBA{R: 0xA8, G: 0x99, B: 0x84, A: 0xFF} // #a89984
@@ -312,13 +315,13 @@ func (r *timelineRenderer) createTodoItem(todo *models.TodoItem) fyne.CanvasObje
 
 	// Layout: [ColorSquare] [Spacer] [Checkbox] [Name................] [Time] [Star] [Delete]
 	// Add spacer between color and checkbox (doubled spacing)
-	leftSection := container.NewHBox(colorSquareAligned, CreateSpacer(8, 1), doneCheckCentered)
-	rightSection := container.NewHBox(timeLabel, CreateSpacer(8, 1), statusCentered, CreateSpacer(4, 1), deleteBtnCentered)
+	leftSection := container.NewHBox(colorSquareAligned, helpers.CreateSpacer(8, 1), doneCheckCentered)
+	rightSection := container.NewHBox(timeLabel, helpers.CreateSpacer(8, 1), statusCentered, helpers.CreateSpacer(4, 1), deleteBtnCentered)
 	content := container.NewBorder(nil, nil, leftSection, rightSection, verticallyCenterWide(nameLabel))
 
 	// Row with bottom border only (no card)
 	var borderClr color.Color
-	if _, ok := fyne.CurrentApp().Settings().Theme().(*LightSoftTheme); ok {
+	if isLightTheme {
 		borderClr = color.NRGBA{R: 0xD0, G: 0xD0, B: 0xD0, A: 0xFF} // #d0d0d0 - darker gray for visibility
 	} else {
 		borderClr = color.NRGBA{R: 0x3c, G: 0x38, B: 0x36, A: 0xFF}
@@ -427,7 +430,7 @@ func (tt *tappableTodo) Cursor() desktop.Cursor {
 func (tt *tappableTodo) Tapped(*fyne.PointEvent) {
 	// flash overlay
 	if tt.press != nil {
-		col := toNRGBA(theme.Color(theme.ColorNameHover))
+		col := helpers.ToNRGBA(theme.Color(theme.ColorNameHover))
 		if col.A < 60 {
 			col.A = 60
 		}
@@ -512,13 +515,14 @@ func (t *Timeline) confirmDelete(todo *models.TodoItem) {
 
 	var restoreTheme func()
 	currentTheme := fyne.CurrentApp().Settings().Theme()
-	messageColor := toNRGBA(theme.Color(theme.ColorNameForeground))
-	overrideTheme := &foregroundOverrideTheme{
+	isLightTheme := helpers.IsLightTheme()
+	messageColor := helpers.ToNRGBA(theme.Color(theme.ColorNameForeground))
+overrideTheme := &foregroundOverrideTheme{
 		base:         currentTheme,
 		headingDelta: 5,
 		textDelta:    5,
 	}
-	if _, ok := currentTheme.(*LightSoftTheme); ok {
+	if isLightTheme {
 		messageColor = color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0xFF}
 		overrideTheme.overrideForeground = true
 		overrideTheme.overrideColor = messageColor
@@ -532,7 +536,7 @@ func (t *Timeline) confirmDelete(todo *models.TodoItem) {
 	message.TextSize = 16
 	content := container.NewVBox(
 		container.NewHBox(message, layout.NewSpacer()),
-		CreateSpacer(1, 20),
+		helpers.CreateSpacer(1, 20),
 	)
 	conf := dialog.NewCustomConfirm(
 		localization.GetString("confirm_delete_title"),
@@ -765,9 +769,10 @@ func newSquareCheckbox(initial bool, onChanged func(bool)) *squareCheckbox {
 
 func (c *squareCheckbox) CreateRenderer() fyne.WidgetRenderer {
 	// colors
+	isLightTheme := helpers.IsLightTheme()
 	var border color.Color
 	var fillChecked color.Color
-	if _, ok := fyne.CurrentApp().Settings().Theme().(*LightSoftTheme); ok {
+	if isLightTheme {
 		border = color.NRGBA{R: 0xD0, G: 0xD0, B: 0xD0, A: 0xFF}
 		fillChecked = color.NRGBA{R: 0x4C, G: 0xAF, B: 0x50, A: 0xFF} // #4caf50
 	} else {
@@ -807,8 +812,9 @@ func (c *squareCheckbox) Tapped(*fyne.PointEvent) {
 
 func (c *squareCheckbox) Refresh() {
 	// update visuals according to checked state and theme
+	isLightTheme := helpers.IsLightTheme()
 	var fillChecked color.Color
-	if _, ok := fyne.CurrentApp().Settings().Theme().(*LightSoftTheme); ok {
+	if isLightTheme {
 		fillChecked = color.NRGBA{R: 0x4C, G: 0xAF, B: 0x50, A: 0xFF}
 	} else {
 		fillChecked = color.NRGBA{R: 0x98, G: 0x97, B: 0x1a, A: 0xFF}
@@ -847,10 +853,11 @@ func newStatusIndicator(todo *models.TodoItem, onToggle func(bool)) *statusIndic
 func (s *statusIndicator) CreateRenderer() fyne.WidgetRenderer {
 	var txt string
 	var col color.Color
+	isLightTheme := helpers.IsLightTheme()
 	if s.todo.Done {
 		// Completed: show check mark
 		txt = "✓"
-		if _, ok := fyne.CurrentApp().Settings().Theme().(*LightSoftTheme); ok {
+		if isLightTheme {
 			col = color.NRGBA{R: 0x4C, G: 0xAF, B: 0x50, A: 0xFF}
 		} else {
 			col = color.NRGBA{R: 0x98, G: 0x97, B: 0x1a, A: 0xFF}
@@ -860,7 +867,7 @@ func (s *statusIndicator) CreateRenderer() fyne.WidgetRenderer {
 		txt = "★"
 		if s.todo.Starred {
 			// Starred color per theme
-			if _, ok := fyne.CurrentApp().Settings().Theme().(*LightSoftTheme); ok {
+			if isLightTheme {
 				// Light theme: blue star
 				col = color.NRGBA{R: 0x3C, G: 0x82, B: 0xFF, A: 0xFF} // #3c82ff
 			} else {

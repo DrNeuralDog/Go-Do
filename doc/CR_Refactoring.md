@@ -26,7 +26,7 @@ This document outlines a comprehensive refactoring plan for the Go Do applicatio
 ### 1.1 Create UI Helper Packages Structure
 **Estimated time:** 30 minutes
 
-- [ ] Create directory structure:
+- [x] Create directory structure:
   ```
   src/ui/helpers/
   src/ui/widgets/
@@ -36,43 +36,43 @@ This document outlines a comprehensive refactoring plan for the Go Do applicatio
 **Files affected:** `src/ui/style_helpers.go`, `src/ui/forms/todoform.go`
 **Estimated time:** 45 minutes
 
-- [ ] Create `src/ui/helpers/color.go`
-- [ ] Move `toNRGBA()` from style_helpers.go:162-167
-- [ ] Move `lighten()` from style_helpers.go:169-183
-- [ ] Move `darken()` from style_helpers.go:185-195
-- [ ] Move `hex()` from style_helpers.go:197-205
-- [ ] Remove duplicate `lighten()` from todoform.go:752-764
-- [ ] Update all imports in:
-  - [ ] src/ui/style_helpers.go
-  - [ ] src/ui/forms/todoform.go
-  - [ ] src/ui/timeline.go
-  - [ ] src/ui/mainwindow.go
-  - [ ] src/ui/pomodoro_window.go
+- [x] Create `src/ui/helpers/color.go`
+- [x] Move `toNRGBA()` from style_helpers.go:162-167
+- [x] Move `lighten()` from style_helpers.go:169-183
+- [x] Move `darken()` from style_helpers.go:185-195
+- [x] Move `hex()` from style_helpers.go:197-205
+- [x] Remove duplicate `lighten()` from todoform.go:752-764
+- [x] Update all imports in:
+  - [x] src/ui/style_helpers.go
+  - [x] src/ui/forms/todoform.go
+  - [x] src/ui/timeline.go
+  - [x] src/ui/mainwindow.go
+  - [x] src/ui/pomodoro_window.go
   - [ ] src/ui/notes_window.go
-- [ ] Test: Run `go build` to ensure no compilation errors
+- [x] Test: Run `go build` to ensure no compilation errors
 
 ### 1.3 Extract Theme Detection Utilities
 **Files affected:** All UI files
 **Estimated time:** 1 hour
 
-- [ ] Create `src/ui/helpers/theme.go`
-- [ ] Add function `IsLightTheme() bool`
-- [ ] Add function `GetBackgroundColor() color.Color`
-- [ ] Add function `GetForegroundColor() color.Color`
-- [ ] Add function `GetCardColor() color.Color`
-- [ ] Replace all instances of `if _, ok := currentTheme.(*LightSoftTheme)` in:
-  - [ ] src/ui/mainwindow.go (lines 178, 191, 224, 255, etc.)
-  - [ ] src/ui/timeline.go (lines 223, 237, 283, 522, 770, 811, 853)
-  - [ ] src/ui/forms/todoform.go (lines 519, 539, 554)
-  - [ ] src/ui/pomodoro_window.go (lines 84, 110, 184)
+- [x] Create `src/ui/helpers/theme.go`
+- [x] Add function `IsLightTheme() bool`
+- [x] Add function `GetBackgroundColor() color.Color`
+- [x] Add function `GetForegroundColor() color.Color`
+- [x] Add function `GetCardColor() color.Color`
+- [x] Replace all instances of `if _, ok := currentTheme.(*LightSoftTheme)` in:
+  - [x] src/ui/mainwindow.go (lines 178, 191, 224, 255, etc.)
+  - [x] src/ui/timeline.go (lines 223, 237, 283, 522, 770, 811, 853)
+  - [x] src/ui/forms/todoform.go (lines 519, 539, 554)
+  - [x] src/ui/pomodoro_window.go (lines 84, 110, 184)
   - [ ] src/ui/notes_window.go (if applicable)
-- [ ] Test: Run application and toggle theme to verify functionality
+- [x] Test: Run application and toggle theme to verify functionality
 
 ### 1.4 Extract Constants
 **Estimated time:** 30 minutes
 
-- [ ] Create `src/ui/constants.go`
-- [ ] Extract window dimensions:
+- [x] Create `src/ui/constants.go`
+- [x] Extract window dimensions:
   ```go
   const (
       MainWindowWidth       = 420
@@ -83,7 +83,7 @@ This document outlines a comprehensive refactoring plan for the Go Do applicatio
       NotesWindowHeight     = 300
   )
   ```
-- [ ] Extract UI element sizes:
+- [x] Extract UI element sizes:
   ```go
   const (
       TimelineItemHeight    = 80
@@ -93,21 +93,21 @@ This document outlines a comprehensive refactoring plan for the Go Do applicatio
       ProgressRingSize      = 200
   )
   ```
-- [ ] Extract color constants (reference colors used in UI)
-- [ ] Replace magic numbers in:
-  - [ ] src/ui/mainwindow.go:150 (window size)
-  - [ ] src/ui/timeline.go:55 (item height)
-  - [ ] src/ui/pomodoro_window.go (window sizes)
+- [x] Extract color constants (reference colors used in UI)
+- [x] Replace magic numbers in:
+  - [x] src/ui/mainwindow.go:150 (window size)
+  - [x] src/ui/timeline.go:55 (item height)
+  - [x] src/ui/pomodoro_window.go (window sizes)
   - [ ] src/ui/notes_window.go (window sizes)
   - [ ] Other hardcoded values
-- [ ] Test: Build and run to verify no visual changes
+- [x] Test: Build and run to verify no visual changes
 
 ### 1.5 Create Persistence Interfaces
 **Files affected:** `src/persistence/`
 **Estimated time:** 1 hour
 
-- [ ] Create `src/persistence/interfaces.go`
-- [ ] Define `TodoRepository` interface:
+- [x] Create `src/persistence/interfaces.go`
+- [x] Define `TodoRepository` interface:
   ```go
   type TodoRepository interface {
       GetTodosForMonth(year, month int) ([]*models.TodoItem, error)
@@ -122,7 +122,7 @@ This document outlines a comprehensive refactoring plan for the Go Do applicatio
       MigrateAllToYAML() error
   }
   ```
-- [ ] Define `ConfigRepository` interface:
+- [x] Define `ConfigRepository` interface:
   ```go
   type ConfigRepository interface {
       LoadConfig() (*models.Config, error)
@@ -130,30 +130,30 @@ This document outlines a comprehensive refactoring plan for the Go Do applicatio
       GetConfigPath() string
   }
   ```
-- [ ] Verify `MonthlyManager` implements `TodoRepository`
-- [ ] Verify `ConfigManager` implements `ConfigRepository`
-- [ ] Test: Run `go build` to ensure interfaces are satisfied
+- [x] Verify `MonthlyManager` implements `TodoRepository`
+- [x] Verify `ConfigManager` implements `ConfigRepository`
+- [x] Test: Run `go build` to ensure interfaces are satisfied
 
 ### 1.6 Update UI to Use Interfaces
 **Files affected:** All UI components
 **Estimated time:** 1.5 hours
 
-- [ ] Update `src/ui/mainwindow.go`:
-  - [ ] Change `dataManager *persistence.MonthlyManager` to `dataManager persistence.TodoRepository` (line 28)
-  - [ ] Change `configManager *persistence.ConfigManager` to `configManager persistence.ConfigRepository` (line 29)
-  - [ ] Update `NewMainWindow()` signature
-- [ ] Update `src/ui/timeline.go`:
-  - [ ] Change `dataManager *persistence.MonthlyManager` to `dataManager persistence.TodoRepository` (line 26)
-  - [ ] Update `NewTimeline()` signature
-- [ ] Update `src/ui/forms/todoform.go`:
-  - [ ] Change `dataManager *persistence.MonthlyManager` to `dataManager persistence.TodoRepository` (line 27)
-  - [ ] Update `NewTodoForm()` signature
+- [x] Update `src/ui/mainwindow.go`:
+  - [x] Change `dataManager *persistence.MonthlyManager` to `dataManager persistence.TodoRepository` (line 28)
+  - [x] Change `configManager *persistence.ConfigManager` to `configManager persistence.ConfigRepository` (line 29)
+  - [x] Update `NewMainWindow()` signature
+- [x] Update `src/ui/timeline.go`:
+  - [x] Change `dataManager *persistence.MonthlyManager` to `dataManager persistence.TodoRepository` (line 26)
+  - [x] Update `NewTimeline()` signature
+- [x] Update `src/ui/forms/todoform.go`:
+  - [x] Change `dataManager *persistence.MonthlyManager` to `dataManager persistence.TodoRepository` (line 27)
+  - [x] Update `NewTodoForm()` signature
 - [ ] Update `src/ui/pomodoro_window.go`:
   - [ ] Check for dataManager usage and update if needed
-- [ ] Update `src/main.go`:
-  - [ ] Verify dependency injection is explicit
-  - [ ] Pass interfaces instead of concrete types
-- [ ] Test: Full application test - create, edit, delete todos
+- [x] Update `src/main.go`:
+  - [x] Verify dependency injection is explicit
+  - [x] Pass interfaces instead of concrete types
+- [x] Test: Full application test - create, edit, delete todos
 
 ---
 
@@ -163,37 +163,37 @@ This document outlines a comprehensive refactoring plan for the Go Do applicatio
 **Files affected:** `src/ui/mainwindow.go`, potentially others
 **Estimated time:** 45 minutes
 
-- [ ] Create `src/models/sorting.go`
-- [ ] Add `SortTodosByOrder(todos []*TodoItem)` function
-- [ ] Extract sorting logic from mainwindow.go:373-398
-- [ ] Replace duplicate sorting code in:
-  - [ ] src/ui/mainwindow.go:373-398 (loadTodos)
-  - [ ] src/ui/mainwindow.go:516-538 (onTodoReorder)
-  - [ ] src/ui/mainwindow.go:594-616 (onTodoReorder UI update)
-- [ ] Test: Verify todo ordering works correctly after changes
+- [x] Create `src/models/sorting.go`
+- [x] Add `SortTodosByOrder(todos []*TodoItem)` function
+- [x] Extract sorting logic from mainwindow.go:373-398
+- [x] Replace duplicate sorting code in:
+  - [x] src/ui/mainwindow.go:373-398 (loadTodos)
+  - [x] src/ui/mainwindow.go:516-538 (onTodoReorder)
+  - [x] src/ui/mainwindow.go:594-616 (onTodoReorder UI update)
+- [x] Test: Verify todo ordering works correctly after changes
 
 ### 2.2 Add ViewMode String Conversion Methods
 **Files affected:** `src/models/viewmode.go`, `src/ui/mainwindow.go`
 **Estimated time:** 30 minutes
 
-- [ ] Update `src/models/viewmode.go`:
-  - [ ] Add `String() string` method to ViewMode
-  - [ ] Add `ViewModeFromString(s string) ViewMode` function
-- [ ] Update `src/ui/mainwindow.go`:
-  - [ ] Replace manual conversion at lines 234-245 with `ViewModeFromString()`
-  - [ ] Replace manual conversion at lines 715-726 with `.String()`
-  - [ ] Replace manual conversion at lines 743-756 with `.String()`
-- [ ] Test: Change view modes and restart app to verify persistence
+- [x] Update `src/models/viewmode.go`:
+  - [x] Add `String() string` method to ViewMode
+  - [x] Add `ViewModeFromString(s string) ViewMode` function
+- [x] Update `src/ui/mainwindow.go`:
+  - [x] Replace manual conversion at lines 234-245 with `ViewModeFromString()`
+  - [x] Replace manual conversion at lines 715-726 with `.String()`
+  - [x] Replace manual conversion at lines 743-756 with `.String()`
+- [x] Test: Change view modes and restart app to verify persistence
 
 ### 2.3 Extract Layout Helpers
 **Files affected:** `src/ui/style_helpers.go`
 **Estimated time:** 30 minutes
 
-- [ ] Create `src/ui/helpers/layout.go`
-- [ ] Move `CreateSpacer()` from style_helpers.go
-- [ ] Move `CreateCardStyle()` from style_helpers.go
-- [ ] Move other layout-related helper functions
-- [ ] Update imports across UI files
+- [x] Create `src/ui/helpers/layout.go`
+- [x] Move `CreateSpacer()` from style_helpers.go
+- [x] Move `CreateCardStyle()` from style_helpers.go
+- [x] Move other layout-related helper functions
+- [x] Update imports across UI files
 - [ ] Test: Build and verify UI renders correctly
 
 ---
