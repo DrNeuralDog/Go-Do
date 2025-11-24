@@ -1,129 +1,124 @@
-<p align="center"><img src="doc/Icons/Logo_Work_Version.png" alt="Go Do Logo" width="520" /></p>
+<p align="left"><img src="doc/Icons/Logo_Work_Version.png" alt="Go Do Logo" height = 370 width="550" /></p>
 
 [![Go](https://img.shields.io/badge/Go-1.21+-00ADD8.svg)](https://golang.org) [![Fyne](https://img.shields.io/badge/Fyne-2.4+-00ACD7.svg)](https://fyne.io) [![License](https://img.shields.io/badge/License-Educational-brightgreen.svg)]()
 
-## Проблема и Решение 🎯
+## The Problem & The Fix 🎯
 
-В современном мире хаотичное управление задачами приводит к потере фокуса, забытым дедлайнам и стрессу. Стикеры на мониторе, заметки в телефоне, задачи в голове — всё это рассеивает внимание и снижает продуктивность.
+In a busy day tasks live everywhere—sticky notes, phone reminders, mental checklists—and that chaos kills focus. Forgotten deadlines, scattered ideas, and constant context switching make it harder to actually get work done.
 
-**Go Do** — это кроссплатформенное приложение для управления задачами с встроенным Pomodoro-таймером, которое превращает хаос в структуру. Организуйте задачи по приоритетам (матрица Эйзенхауэра), отслеживайте их выполнение в удобном таймлайне и концентрируйтесь на работе с техникой Pomodoro.
+**Go Do** is a cross-platform task manager with a built-in Pomodoro timer that turns chaos into structure. Sort work by priority, track progress on a clean timeline, and stay in flow with Pomodoro sessions.
 
-| До использования Go Do                              | После использования Go Do                                                                       |
-| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| Задачи разбросаны по разным местам   | Все задачи в одном месте с месячной организацией                         |
-| Забытые дедлайны и потерянный фокус | Приоритизация по важности/срочности и встроенный Pomodoro-таймер |
-| Ручной учёт выполненных задач            | Автоматическое отслеживание с галочками и звёздочками             |
+| Before Go Do                          | After Go Do                                                     |
+| ------------------------------------- | --------------------------------------------------------------- |
+| Tasks scattered across apps and notes | Everything in one timeline, organized by month                  |
+| Missed deadlines and lost focus       | Priorities by importance/urgency plus a built-in Pomodoro timer |
+| Manual “done” tracking              | Automatic status with checkmarks and stars                      |
 
-### Сравнение продуктивности ⏳
+### ⏳ Productivity Comparison
 
-<p align="center">
-  <a href="doc/Designs/godo_animation.html">
-    <img src="https://img.shields.io/badge/Посмотреть-Интерактивную_Анимацию-667eea?style=for-the-badge&logo=html5&logoColor=white" alt="Productivity Animation"/>
-  </a>
-</p>
+![Productivity comparison chart for Go Do](doc/Designs/TimeComparisonChart.gif)
 
-**Результаты использования Go Do:**
+**What teams observe with Go Do:**
 
-- 📊 **В 2.6 раза** больше выполненных задач за неделю
-- ⚡ **45% времени** экономится за счёт структурированного подхода
-- 🎯 **85% улучшение** концентрации благодаря Pomodoro-таймеру
+- 📊 **2.6x more tasks completed** per week
+- ⚡ **45% less time lost** to context switching thanks to structure
+- 🎯 **85% better focus** reported when using the Pomodoro timer
 
-> **Примечание:** Это учебный проект, созданный для демонстрации навыков разработки кроссплатформенных приложений на Go с использованием Fyne.
+> **Note:** This is a learning project showcasing cross-platform app development in Go with Fyne.
 
-## 🌟 Почему Go Do — ваш must-have инструмент?
+## 🌟 Why Go Do Is a Must-Have
 
-* **📅 Умный Таймлайн:** Все задачи отображаются в хронологическом порядке с группировкой по датам. Быстрая навигация между месяцами с помощью стрелок!
-* **⏱️ Встроенный Pomodoro-таймер:** Работайте с полной концентрацией! Настраиваемые интервалы работы (25 мин), короткого (5 мин) и длинного перерыва (15 мин). Визуальный прогресс с цветовой индикацией.
-* **⭐ Избранные Задачи:** Отмечайте особо важные задачи звёздочкой для быстрого доступа.
-* **✅ Отслеживание Выполнения:** Простые чекбоксы для отметки выполненных задач с визуальным подтверждением.
-* **🌓 Светлая/Тёмная Темы:** Переключайтесь между режимами для комфортной работы в любое время суток. Используется стильная Gruvbox-палитра для тёмной темы.
-* **📂 Месячная Организация:** Задачи автоматически сохраняются в YAML-файлы по месяцам (`data/YYYYMM.yaml`). Поддержка устаревшего TXT-формата для обратной совместимости.
-* **🔍 Гибкая Фильтрация:** Просматривайте все задачи, только незавершённые, только выполненные или только избранные.
+* **📅 Smart Timeline:** Tasks live in one chronological view with date grouping and quick month-to-month navigation.
+* **⏱️ Built-in Pomodoro Timer:** Customize work (25m), short break (5m), and long break (15m) intervals, with color-coded progress.
+* **⭐ Favorites:** Star mission-critical items for instant access.
+* **✅ Done Tracking:** Lightweight checkboxes with visual confirmation so you always know what’s finished.
+* **🌓 Light/Dark Themes:** Switch anytime; the dark mode uses a Gruvbox-inspired palette that’s easy on the eyes.
+* **📂 Monthly Files:** Tasks autosave to per-month YAML files (`data/YYYYMM.yaml`) with legacy TXT compatibility.
+* **🔍 Flexible Filters:** View everything, only active, only done, or just favorites.
 
-**Идеально для:** Студентов, профессионалов, всех, кто хочет структурировать свою жизнь и повысить продуктивность!
+**Perfect for:** Students, busy professionals, and anyone who wants a calmer, more deliberate workflow.
 
-## Достижения Проекта 🏆
+## Project Highlights 🏆
 
-- **Решает Реальную Проблему:** Полноценная система управления задачами с техникой Pomodoro.
-- **Учебный Проект:** Демонстрирует навыки работы с Go, Fyne, файловой персистентностью и UI/UX дизайном.
-- **Кроссплатформенность:** Работает на Windows, macOS и Linux без изменений.
-- **Чистая Архитектура:** Разделение на слои (Models, Persistence, UI) с использованием SOLID-принципов.
+- **Solves a Real Pain:** A full task system with Pomodoro that keeps you on track.
+- **Learning-Focused:** Demonstrates Go, Fyne, file persistence, and UI/UX craft.
+- **Cross-Platform:** Runs on Windows, macOS, and Linux without tweaks.
+- **Clean Architecture:** Layered structure (Models, Persistence, UI) that follows SOLID principles.
 
-## Технические Особенности 🔧
+## Technical Details 🔧
 
-- **Layered Architecture:** Чёткое разделение на Models, Persistence Layer и UI Layer.
-- **Месячная Организация Данных:** MonthlyManager с in-memory кэшированием для производительности.
-- **YAML Persistence:** Современный формат хранения с автоматической миграцией из устаревшего TXT-формата.
-- **Матрица Эйзенхауэра:** 4-уровневая система приоритизации с Gruvbox-цветовой палитрой.
-- **Pomodoro Integration:** Настраиваемый таймер с визуальным прогрессом и поддержкой сессий.
-- **Theme System:** Поддержка светлой темы и кастомной Gruvbox Black темы.
+- **Layered Architecture:** Clear separation between Models, Persistence Layer, and UI Layer.
+- **Monthly Data Organization:** MonthlyManager with in-memory caching for speed.
+- **Eisenhower Matrix:** Four priority levels with a Gruvbox-inspired color palette.
+- **Pomodoro Integration:** Configurable timer with visual progress and session tracking.
+- **Theme System:** Switchable light and dark themes.
 
-Построено с использованием лучших практик: модульность, тестируемость, чистый код.
+Built with best practices: modularity, testability, and readable code.
 
-## Инструкции по Сборке 🛠️
+## Build Instructions 🛠️
 
-### Требования
+### Requirements
 
 - Go 1.21+
 - Fyne v2.4+
-- Make (опционально, для использования Makefile)
+- Make (optional, if you want the Makefile targets)
 
-### Сборка на Windows
+### Build on Windows
 
 ```bash
-# 1. Установить зависимости
+# 1. Install dependencies
 go mod tidy
 
-# 2. Собрать приложение
+# 2. Build the app
 go build -o bin/GoDo.exe src/main.go
 
-# Или использовать Make
+# Or use Make
 make build-windows
 
-# 3. Запустить
+# 3. Run
 .\bin\GoDo.exe
 ```
 
-### Сборка на Linux
+### Build on Linux
 
 ```bash
-# 1. Установить зависимости
+# 1. Install dependencies
 sudo apt install libgl1-mesa-dev xorg-dev
 go mod tidy
 
-# 2. Собрать приложение
+# 2. Build the app
 go build -o bin/GoDo src/main.go
 
-# Или использовать Make
+# Or use Make
 make build-linux
 
-# 3. Запустить
+# 3. Run
 ./bin/GoDo
 ```
 
-### Сборка на macOS
+### Build on macOS
 
 ```bash
-# 1. Установить зависимости
+# 1. Install dependencies
 go mod tidy
 
-# 2. Собрать приложение
+# 2. Build the app
 go build -o bin/GoDo src/main.go
 
-# Или использовать Make
+# Or use Make
 make build-macos
 
-# 3. Запустить
+# 3. Run
 ./bin/GoDo
 ```
 
-### Кроссплатформенная Сборка
+### Cross-Platform Build
 
 ```bash
-# Собрать для всех платформ
+# Build for all platforms
 make build-all
 
-# Или вручную:
+# Or manually:
 # Windows
 GOOS=windows GOARCH=amd64 go build -o bin/GoDo.exe src/main.go
 
@@ -134,122 +129,122 @@ GOOS=darwin GOARCH=amd64 go build -o bin/GoDo-macos src/main.go
 GOOS=linux GOARCH=amd64 go build -o bin/GoDo-linux src/main.go
 ```
 
-## Демонстрация Возможностей 📋
+## Feature Tour 📋
 
-### Главное Окно (Тёмная Тема)
+### Main Window (Dark Theme)
 
 <p align="center"><img src="doc/Scrins/DarkThemeMain.png" alt="Dark Theme Main" width="400"/></p>
 
-Главный экран с таймлайном задач. Цветовая индикация приоритетов (жёлтая полоса слева), чекбоксы для отметки выполнения, звёздочки для избранного, кнопки навигации по месяцам и фильтр отображения.
+The primary view with the timeline. Color coding shows priority (left accent), checkboxes mark completion, stars flag favorites, arrow buttons jump months, and a filter switches views.
 
-### Главное Окно (Светлая Тема)
+### Main Window (Light Theme)
 
 <p align="center"><img src="doc/Scrins/LightThemeMain.png" alt="Light Theme Main" width="400"/></p>
 
-Тот же функционал в светлой цветовой схеме. Контрастные акценты (оранжевые кнопки) для лучшей читаемости.
+Same layout with a bright palette. Contrast accents (orange buttons) keep everything readable.
 
-### Окно Добавления Задачи
+### Add Task Window
 
 <p align="center"><img src="doc/Scrins/LightThemeAddWin.png" alt="Add Task Window" width="350"/></p>
 
-Форма создания новой задачи: название, дата/время, местоположение, метка, тип (Event/Task), приоритет (4 уровня), описание и настройка напоминания (слайдер 0-864 минут).
+Create or edit a task: title, date/time, location, label, type (Event/Task), priority (4 levels), description, and reminder slider (0-864 minutes).
 
-### Pomodoro-таймер (Светлая Тема)
+### Pomodoro Timer (Light Theme)
 
 <p align="center"><img src="doc/Scrins/LightThemePomodoro.png" alt="Pomodoro Timer Light" width="350"/></p>
 
-Круговой таймер с цветовой индикацией прогресса (градиент от красного к жёлтому к зелёному). Настройки времени работы, короткого и длинного перерывов. Кнопки управления: Start, Pause, Reset.
+Circular timer with gradient progress (red → yellow → green). Configure work time, short and long breaks. Controls: Start, Pause, Reset.
 
-### Pomodoro-таймер (Тёмная Тема)
+### Pomodoro Timer (Dark Theme)
 
 <p align="center"><img src="doc/Scrins/DarkThemePomodoro.png" alt="Pomodoro Timer Dark" width="350"/></p>
 
-Тот же таймер в тёмной теме. Отображение текущего состояния (Work/Break), счётчик завершённых сессий.
+The same timer in dark mode. Shows current state (Working/Focused) and counts completed sessions.
 
-## Архитектурный Дизайн 📐
+## Architectural Design 📐
 
-Модульность для расширяемости: UI отделён от бизнес-логики. Fyne выбран для нативного GUI с поддержкой кроссплатформенности. Архитектура построена на принципах производительности и чистоты кода.
+Modular by design: UI is separated from business logic. Fyne provides a native-feel GUI across platforms. The structure is built for speed and clarity.
 
-### Компоненты
+### Components
 
 #### UI Layer (`src/ui/`)
 
-- **MainWindow** — главное окно с таймлайном задач, навигацией и фильтрами
-- **TodoForm** — форма создания/редактирования задач
-- **PomodoroWindow** — окно Pomodoro-таймера с настройками
-- **Timeline** — виджет отображения задач с группировкой по датам
-- **GruvboxTheme** — кастомная тёмная тема
+- **MainWindow** — main view with the task timeline, navigation, and filters
+- **TodoForm** — create/edit form for tasks
+- **PomodoroWindow** — Pomodoro timer window with settings
+- **Timeline** — task list widget grouped by date
+- **GruvboxTheme** — custom dark theme
 
 #### Models (`src/models/`)
 
-- **TodoItem** — структура задачи (Name, Content, Location, Label, TodoTime, Priority, Done, Starred, etc.)
-- **ViewMode** — режимы фильтрации (All, Incomplete, Complete, Starred)
-- **Priority** — система приоритетов (0-3 уровня)
+- **TodoItem** — task data (Name, Content, Location, Label, TodoTime, Priority, Done, Starred, etc.)
+- **ViewMode** — filter modes (All, Incomplete, Complete, Starred)
+- **Priority** — priority system (levels 0-3)
 
 #### Persistence Layer (`src/persistence/`)
 
-- **MonthlyManager** — оркестратор операций с данными, управление in-memory кэшем
-- **FileIOManager** — чтение/запись YAML и TXT файлов, атомарные операции
-- **Migration** — автоматическая миграция TXT → YAML
+- **MonthlyManager** — orchestrates data ops, manages in-memory cache
+- **FileIOManager** — reads/writes YAML and TXT files with atomic operations
+- **Migration** — automatic TXT → YAML migration
 
 #### Utils (`src/utils/`)
 
-- **Localization** — поддержка мультиязычности
-- **Helpers** — вспомогательные функции (форматирование дат, валидация)
+- **Localization** — multi-language support
+- **Helpers** — helpers for date formatting, validation, etc.
 
-### Блок-схема Пользовательского Опыта
+### User Journey Flow
 
 ```mermaid
 flowchart TD
-    Start([Пользователь запускает Go Do]) --> MainWindow[Главное Окно]
+    Start([User opens Go Do]) --> MainWindow[Main Window]
 
-    MainWindow --> Action{Что нужно сделать?}
+    MainWindow --> Action{What do they need to do?}
 
-    Action -->|Создать задачу| ClickPlus[Нажать кнопку +]
-    ClickPlus --> AddForm[Форма добавления задачи]
-    AddForm --> FillForm[Заполнить: название,<br/>дату, приоритет,<br/>описание, напоминание]
-    FillForm --> SaveTask[Нажать Add]
+    Action -->|Create a task| ClickPlus[Press the + button]
+    ClickPlus --> AddForm[Task creation form]
+    AddForm --> FillForm[Fill in: title,<br/>date, priority,<br/>description, reminder]
+    FillForm --> SaveTask[Press Add]
     SaveTask --> MainWindow
 
-    Action -->|Просмотреть задачи| ViewTasks[Просмотр таймлайна]
-    ViewTasks --> Navigate{Навигация}
-    Navigate -->|Другая дата| Arrows[Использовать стрелки ← →<br/>для смены месяца]
-    Navigate -->|Фильтр| Filter[Выбрать режим в ComboBox:<br/>All / Incomplete /<br/>Complete / Starred]
+    Action -->|Review tasks| ViewTasks[View the timeline]
+    ViewTasks --> Navigate{Navigate}
+    Navigate -->|Different month| Arrows[Use arrows ← →<br/>to switch months]
+    Navigate -->|Filter| Filter[Choose mode in ComboBox:<br/>All / Incomplete /<br/>Complete / Starred]
     Arrows --> MainWindow
     Filter --> MainWindow
 
-    Action -->|Отметить важную| ClickStar[Нажать звёздочку ⭐<br/>на строке задачи]
-    ClickStar --> Starred[Задача помечена<br/>как избранная]
+    Action -->|Mark important| ClickStar[Click the ⭐<br/>on a task row]
+    ClickStar --> Starred[Task marked<br/>as favorite]
     Starred --> MainWindow
 
-    Action -->|Выполнить задачу| ClickCheck[Нажать чекбокс ☐<br/>на строке задачи]
-    ClickCheck --> Completed[Задача помечена ✓<br/>как выполненная]
+    Action -->|Complete a task| ClickCheck[Click the checkbox ☐<br/>on a task row]
+    ClickCheck --> Completed[Task marked ✓<br/>as done]
     Completed --> MainWindow
 
-    Action -->|Использовать Pomodoro| ClickPomodoro[Нажать кнопку<br/>Pomodoro]
-    ClickPomodoro --> PomodoroWindow[Окно Pomodoro-таймера]
-    PomodoroWindow --> ConfigPomodoro[Настроить:<br/>- Время работы<br/>- Короткий перерыв<br/>- Длинный перерыв]
-    ConfigPomodoro --> StartTimer[Нажать Start]
-    StartTimer --> WorkSession[Работа над задачей]
-    WorkSession --> TimerControls{Управление}
-    TimerControls -->|Пауза| Pause[Pause]
-    TimerControls -->|Сброс| Reset[Reset]
-    TimerControls -->|Завершение| Break[Перерыв]
+    Action -->|Use Pomodoro| ClickPomodoro[Click<br/>Pomodoro]
+    ClickPomodoro --> PomodoroWindow[Pomodoro timer window]
+    PomodoroWindow --> ConfigPomodoro[Configure:<br/>- Work time<br/>- Short break<br/>- Long break]
+    ConfigPomodoro --> StartTimer[Press Start]
+    StartTimer --> WorkSession[Focus on the task]
+    WorkSession --> TimerControls{Control timer}
+    TimerControls -->|Pause| Pause[Pause]
+    TimerControls -->|Reset| Reset[Reset]
+    TimerControls -->|Finish| Break[Break]
     Pause --> StartTimer
     Reset --> StartTimer
-    Break --> NextSession{Следующая сессия?}
-    NextSession -->|Да| StartTimer
-    NextSession -->|Нет| ClosePomodoro[Закрыть окно]
+    Break --> NextSession{Start another session?}
+    NextSession -->|Yes| StartTimer
+    NextSession -->|No| ClosePomodoro[Close window]
     ClosePomodoro --> MainWindow
 
-    Action -->|Сменить тему| ClickTheme[Нажать кнопку<br/>Light/Dark]
-    ClickTheme --> ToggleTheme[Переключение темы]
+    Action -->|Toggle theme| ClickTheme[Press<br/>Light/Dark]
+    ClickTheme --> ToggleTheme[Switch theme]
     ToggleTheme --> MainWindow
 
-    MainWindow --> Exit{Закрыть приложение?}
-    Exit -->|Да| SaveData[Автосохранение<br/>в YAML]
-    SaveData --> End([Конец])
-    Exit -->|Нет| Action
+    MainWindow --> Exit{Close the app?}
+    Exit -->|Yes| SaveData[Autosave<br/>to YAML]
+    SaveData --> End([Done])
+    Exit -->|No| Action
 
     style Start fill:#667eea,stroke:#333,stroke-width:3px,color:#fff
     style End fill:#764ba2,stroke:#333,stroke-width:3px,color:#fff
@@ -265,11 +260,11 @@ flowchart TD
 ```mermaid
 flowchart TD
     subgraph UI["UI Layer (src/ui/)"]
-        MainWindow[MainWindow<br/>- Главное окно<br/>- Навигация<br/>- Фильтрация]
-        TodoForm[TodoForm<br/>- Создание/редактирование<br/>- Валидация]
-        PomodoroWin[PomodoroWindow<br/>- Таймер<br/>- Настройки]
-        Timeline[Timeline<br/>- Отображение задач<br/>- Группировка по датам]
-        Theme[GruvboxTheme<br/>- Кастомная тёмная тема]
+        MainWindow[MainWindow<br/>- Main view<br/>- Navigation<br/>- Filtering]
+        TodoForm[TodoForm<br/>- Create/Edit<br/>- Validation]
+        PomodoroWin[PomodoroWindow<br/>- Timer<br/>- Settings]
+        Timeline[Timeline<br/>- Task list<br/>- Date grouping]
+        Theme[GruvboxTheme<br/>- Custom dark theme]
     end
 
     subgraph Models["Models (src/models/)"]
@@ -294,33 +289,33 @@ flowchart TD
         TXTFiles[(YYYYMM.txt<br/>Legacy format)]
     end
 
-    MainWindow -->|Использует| Timeline
-    MainWindow -->|Открывает| TodoForm
-    MainWindow -->|Открывает| PomodoroWin
-    MainWindow -->|Применяет| Theme
-    MainWindow -->|Вызывает| MonthlyMgr
+    MainWindow -->|Uses| Timeline
+    MainWindow -->|Opens| TodoForm
+    MainWindow -->|Opens| PomodoroWin
+    MainWindow -->|Applies| Theme
+    MainWindow -->|Calls| MonthlyMgr
 
-    TodoForm -->|Создаёт/редактирует| TodoItem
-    TodoForm -->|Вызывает| MonthlyMgr
+    TodoForm -->|Creates/edits| TodoItem
+    TodoForm -->|Calls| MonthlyMgr
 
-    Timeline -->|Отображает| TodoItem
-    Timeline -->|Использует| ViewMode
-    Timeline -->|Использует| Priority
+    Timeline -->|Renders| TodoItem
+    Timeline -->|Uses| ViewMode
+    Timeline -->|Uses| Priority
 
-    MonthlyMgr -->|Управляет| TodoItem
-    MonthlyMgr -->|Использует| FileIO
-    MonthlyMgr -->|Кэширует в памяти| Cache[In-Memory Cache<br/>Map: YYYYMM → []TodoItem]
+    MonthlyMgr -->|Manages| TodoItem
+    MonthlyMgr -->|Uses| FileIO
+    MonthlyMgr -->|Caches in memory| Cache[In-Memory Cache<br/>Map: YYYYMM → []TodoItem]
 
-    FileIO -->|Читает/пишет| YAMLFiles
-    FileIO -->|Читает legacy| TXTFiles
-    FileIO -->|Использует| Migration
+    FileIO -->|Reads/Writes| YAMLFiles
+    FileIO -->|Reads legacy| TXTFiles
+    FileIO -->|Uses| Migration
 
-    Migration -->|Конвертирует| TXTFiles
-    Migration -->|В| YAMLFiles
+    Migration -->|Converts| TXTFiles
+    Migration -->|To| YAMLFiles
 
-    MainWindow -->|Использует| Localization
-    MainWindow -->|Использует| Helpers
-    TodoForm -->|Использует| Helpers
+    MainWindow -->|Uses| Localization
+    MainWindow -->|Uses| Helpers
+    TodoForm -->|Uses| Helpers
 
     style UI fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
     style Models fill:#fff3e0,stroke:#f57c00,stroke-width:2px
@@ -330,60 +325,41 @@ flowchart TD
     style Cache fill:#fff9c4,stroke:#f9a825,stroke-width:2px
 ```
 
-### Инварианты и Единицы Измерения
+### Architecture Principles
 
-- **Идентификация задач:** Комбинация `TodoTime` + `Name` (без explicit ID)
-- **Формат времени:** `time.Time` в UTC, парсинг через `time.Date()`
-- **Формат хранения:** YAML с wrapper-структурой `{version: 1, todos: [...]}`
-- **Кэш-ключи:** Строки формата "YYYYMM" (`utils.FormatDateKey()`)
-- **Приоритеты:** 0-3 уровня с Gruvbox-цветами (#b8bb26, #83a598, #fe8019, #fb4934)
+- **Separation of concerns:** UI is decoupled from storage; persistence is decoupled from widgets.
+- **Atomic writes:** File operations use `.tmp` → rename to avoid corruption.
+- **Caching:** MonthlyManager caches loaded months for speed.
+- **Backward compatibility:** Legacy TXT format from the original C++ app remains supported.
 
-### Принципы Архитектуры
-
-- **Разделение ответственности:** UI не знает о файловой системе, Persistence не знает о виджетах
-- **Атомарность операций:** Все записи в файлы идут через `.tmp` → rename для предотвращения повреждений
-- **Кэширование:** MonthlyManager кэширует загруженные месяцы для производительности
-- **Обратная совместимость:** Поддержка чтения TXT-формата из оригинального C++ приложения
-
-## Roadmap 📈
-
-- [ ] Поддержка напоминаний через системные уведомления
-- [ ] Экспорт задач в PDF/CSV
-- [ ] Синхронизация между устройствами (облачное хранилище)
-- [ ] Статистика продуктивности с графиками
-- [ ] Теги и категории для задач
-- [ ] Поиск по задачам
-- [ ] Drag-and-drop для изменения порядка задач
-- [ ] Интеграция с календарями (Google Calendar, iCal)
-
-## Тестирование 🧪
+## Testing 🧪
 
 ```bash
-# Запустить все тесты
+# Run all tests
 go test ./tests/...
 
-# Тесты с подробным выводом
+# Verbose output
 go test -v ./tests/...
 
-# Тесты конкретного пакета
+# Targeted suites
 go test ./tests/models/
 go test ./tests/persistence/
 go test ./tests/ui/
 
-# Тесты с покрытием
+# Coverage
 make test-coverage
 ```
 
-Тестовое покрытие включает:
+Coverage focuses on:
 
-- **Unit-тесты:** Models, Persistence Layer
-- **Integration-тесты:** Полные CRUD-циклы, миграция форматов
-- **UI-тесты:** Взаимодействие виджетов (в разработке)
+- **Unit:** Models, Persistence Layer
+- **Integration:** CRUD cycles, format migrations
+- **UI:** Widget interactions (in progress)
 
-## Контакт 📫
+## Contact 📫
 
 Email: neural_dog@proton.me
 
 ---
 
-*Создано с использованием Go и Fyne — учебный проект для демонстрации навыков разработки современных кроссплатформенных приложений.*
+*Built with Go and Fyne — a learning project that showcases modern cross-platform development.*
