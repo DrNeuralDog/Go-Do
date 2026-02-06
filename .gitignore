@@ -345,17 +345,17 @@ CMakeUserPresets.json
 #######################################
 
 build/
-.vscode/
 .idea/
-.claude/
-.cursor/
 styles/
 
-docs/
-docs/*
+# Local editor/agent folders
+/.vscode/
+/.claude/
+/.cursor/
 
-doc/
-doc/*
+# Local documentation (keep out of git)
+/doc/
+/docs/
 
 nul
 
