@@ -5,7 +5,7 @@ import (
 	"image/color"
 	"time"
 
-	assets "godo/doc"
+	assets "godo/resources"
 	"godo/src/localization"
 	"godo/src/models"
 	"godo/src/persistence"

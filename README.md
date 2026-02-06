@@ -1,4 +1,4 @@
-<p align="left"><img src="doc/Icons/Logo_Work_Version.png" alt="Go Do Logo" height = 370 width="550" /></p>
+<p align="left"><img src="resources/Icons/Logo_Work_Version.png" alt="Go Do Logo" height = 370 width="550" /></p>
 
 [![Go](https://img.shields.io/badge/Go-1.21+-00ADD8.svg)](https://golang.org) [![Fyne](https://img.shields.io/badge/Fyne-2.4+-00ACD7.svg)](https://fyne.io) [![License](https://img.shields.io/badge/License-Educational-brightgreen.svg)]()
 
@@ -16,7 +16,7 @@ In a busy day tasks live everywhere—sticky notes, phone reminders, mental chec
 
 ### ⏳ Productivity Comparison
 
-![Productivity comparison chart for Go Do](doc/Designs/TimeComparisonChart.gif)
+![Productivity comparison chart for Go Do](resources/Designs/TimeComparisonChart.gif)
 
 **What teams observe with Go Do:**
 
@@ -133,31 +133,31 @@ GOOS=linux GOARCH=amd64 go build -o bin/GoDo-linux src/main.go
 
 ### Main Window (Dark Theme)
 
-<p align="center"><img src="doc/Scrins/DarkThemeMain.png" alt="Dark Theme Main" width="400"/></p>
+<p align="center"><img src="resources/Scrins/DarkThemeMain.png" alt="Dark Theme Main" width="400"/></p>
 
 The primary view with the timeline. Color coding shows priority (left accent), checkboxes mark completion, stars flag favorites, arrow buttons jump months, and a filter switches views.
 
 ### Main Window (Light Theme)
 
-<p align="center"><img src="doc/Scrins/LightThemeMain.png" alt="Light Theme Main" width="400"/></p>
+<p align="center"><img src="resources/Scrins/LightThemeMain.png" alt="Light Theme Main" width="400"/></p>
 
 Same layout with a bright palette. Contrast accents (orange buttons) keep everything readable.
 
 ### Add Task Window
 
-<p align="center"><img src="doc/Scrins/LightThemeAddWin.png" alt="Add Task Window" width="350"/></p>
+<p align="center"><img src="resources/Scrins/LightThemeAddWin.png" alt="Add Task Window" width="350"/></p>
 
 Create or edit a task: title, date/time, location, label, type (Event/Task), priority (4 levels), description, and reminder slider (0-864 minutes).
 
 ### Pomodoro Timer (Light Theme)
 
-<p align="center"><img src="doc/Scrins/LightThemePomodoro.png" alt="Pomodoro Timer Light" width="350"/></p>
+<p align="center"><img src="resources/Scrins/LightThemePomodoro.png" alt="Pomodoro Timer Light" width="350"/></p>
 
 Circular timer with gradient progress (red → yellow → green). Configure work time, short and long breaks. Controls: Start, Pause, Reset.
 
 ### Pomodoro Timer (Dark Theme)
 
-<p align="center"><img src="doc/Scrins/DarkThemePomodoro.png" alt="Pomodoro Timer Dark" width="350"/></p>
+<p align="center"><img src="resources/Scrins/DarkThemePomodoro.png" alt="Pomodoro Timer Dark" width="350"/></p>
 
 The same timer in dark mode. Shows current state (Working/Focused) and counts completed sessions.
 

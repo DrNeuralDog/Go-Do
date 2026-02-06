@@ -3,7 +3,7 @@ package app
 import (
 	"fmt"
 
-	assets "godo/doc"
+	assets "godo/resources"
 	"godo/src/persistence"
 	"godo/src/ui"
 
