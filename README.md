@@ -1,6 +1,6 @@
 <p align="left"><img src="resources/Icons/Logo_Work_Version.png" alt="Go Do Logo" height = 370 width="550" /></p>
 
-[![Go](https://img.shields.io/badge/Go-1.21+-00ADD8.svg)](https://golang.org) [![Fyne](https://img.shields.io/badge/Fyne-2.4+-00ACD7.svg)](https://fyne.io) [![License](https://img.shields.io/badge/License-Educational-brightgreen.svg)]()
+[![Go](https://img.shields.io/badge/Go-1.19+-00ADD8.svg)](https://golang.org) [![Fyne](https://img.shields.io/badge/Fyne-2.6+-00ACD7.svg)](https://fyne.io) [![License](https://img.shields.io/badge/License-Educational-brightgreen.svg)]()
 
 ## The Problem & The Fix 🎯
 
@@ -28,12 +28,12 @@ In a busy day tasks live everywhere—sticky notes, phone reminders, mental chec
 
 ## 🌟 Why Go Do Is a Must-Have
 
-* **📅 Smart Timeline:** Tasks live in one chronological view with date grouping and quick month-to-month navigation.
-* **⏱️ Built-in Pomodoro Timer:** Customize work (25m), short break (5m), and long break (15m) intervals, with color-coded progress.
+* **📅 Day-Focused Timeline:** The view shows tasks for the selected day; arrows ← → step the date by ±1 day. Per-month files are a storage detail, not the navigation unit.
+* **⏱️ Built-in Pomodoro Timer:** Customize work (default 25m), short break (5m), and long break (15m) intervals, with color-coded progress.
 * **⭐ Favorites:** Star mission-critical items for instant access.
 * **✅ Done Tracking:** Lightweight checkboxes with visual confirmation so you always know what’s finished.
-* **🌓 Light/Dark Themes:** Switch anytime; the dark mode uses a Gruvbox-inspired palette that’s easy on the eyes.
-* **📂 Monthly Files:** Tasks autosave to per-month YAML files (`data/YYYYMM.yaml`) with legacy TXT compatibility.
+* **🌓 Light/Dark Themes:** Switch anytime — the dark mode uses a Gruvbox-inspired palette (`GruvboxBlackTheme`); the light mode is the soft `LightSoftTheme`.
+* **📂 Monthly Files:** Every change (add/edit/toggle/star/reorder/delete) is written immediately to per-month YAML files (`data/YYYYMM.yaml`); legacy TXT files from the original C++ app are read transparently.
 * **🔍 Flexible Filters:** View everything, only active, only done, or just favorites.
 
 **Perfect for:** Students, busy professionals, and anyone who wants a calmer, more deliberate workflow.
@@ -59,8 +59,8 @@ Built with best practices: modularity, testability, and readable code.
 
 ### Requirements
 
-- Go 1.21+
-- Fyne v2.4+
+- Go 1.19+ (per `go.mod`)
+- Fyne v2.6+ (currently `v2.6.3`)
 - Make (optional, if you want the Makefile targets)
 
 ### Build on Windows
@@ -167,30 +167,52 @@ Modular by design: UI is separated from business logic. Fyne provides a native-f
 
 ### Components
 
+#### App Layer (`src/app/`)
+
+- **Application** (`application.go`) — bootstrap that wires everything together: instantiates `MonthlyManager` and `ConfigManager`, runs `RunMigration()` (legacy TXT → YAML), then opens `MainWindow`.
+- **Paths** (`paths.go`) — `GetDataDirectory()` returns the `data/` folder *next to the executable* (not the repo root).
+- **Instance** (`instance.go`) — single-instance guard backed by `utils.SingleInstance`.
+
 #### UI Layer (`src/ui/`)
 
-- **MainWindow** — main view with the task timeline, navigation, and filters
-- **TodoForm** — create/edit form for tasks
-- **PomodoroWindow** — Pomodoro timer window with settings
-- **Timeline** — task list widget grouped by date
-- **GruvboxTheme** — custom dark theme
+- **MainWindow** (`mainwindow.go`) — main view; depends on the `TodoRepository` / `ConfigRepository` interfaces (not concrete types). Day navigation via `onPrevDayClicked` / `onNextDayClicked` (±1 day).
+- **Timeline** (`timeline.go`) — list widget that renders the tasks for the currently selected day; pulls priority color through `TodoItem.GetLevelColor()`.
+- **TodoForm** (`forms/todoform.go`) — create/edit form (title, date/time, place, label, kind, priority, description) plus the custom `ReminderSlider`.
+- **PomodoroWindow** (`pomodoro_window.go`) — wraps `models.PomodoroTimer` / `PomodoroConfig` / `PomodoroState`; renders progress via the `ProgressRing` widget.
+- **GruvboxBlackTheme** (`dark_theme.go`) — Gruvbox-inspired dark theme.
+- **LightSoftTheme** (`light_theme.go`) — soft light theme.
+- **Subpackages:**
+  - `widgets/` — `NumberSpinner`, `CustomSelect`, `GradientRect`, `RoundIconButton`, `SimpleRectButton`, `TinyIconButton`.
+  - `helpers/` — color, layout, theme, window helpers.
+  - `styles/` — shared style constants and helpers.
+  - `threading/` — Fyne main-thread dispatch helpers.
 
 #### Models (`src/models/`)
 
-- **TodoItem** — task data (Name, Content, Location, Label, TodoTime, Priority, Done, Starred, etc.)
-- **ViewMode** — filter modes (All, Incomplete, Complete, Starred)
-- **Priority** — priority system (levels 0-3)
+- **TodoItem** (`todo.go`) — task data: `Name`, `Content`, `Place`, `Label`, `Kind` (Event/Task), `Level` (priority 0–3), `TodoTime`, `Done`, `WarnTime` (reminder minutes), `Starred`, `Order`. Exposes `GetLevelColor()` used by the UI.
+- **PriorityLevel** (`priority.go`) — typed `int` with four levels (0–3) and Gruvbox color mapping. *Not* a struct.
+- **ViewMode** (`viewmode.go`) — All / Incomplete / Complete / Starred.
+- **Sorting** (`sorting.go`) — comparators / sort helpers for ordering tasks.
+- **PomodoroTimer**, **PomodoroConfig**, **PomodoroState** (`pomodoro.go`) — timer business logic and configuration.
+- **Config**, **UIConfig** (`config.go`) — application configuration models persisted by `ConfigManager`.
 
 #### Persistence Layer (`src/persistence/`)
 
-- **MonthlyManager** — orchestrates data ops, manages in-memory cache
-- **FileIOManager** — reads/writes YAML and TXT files with atomic operations
-- **Migration** — automatic TXT → YAML migration
+- **TodoRepository**, **ConfigRepository** (`interfaces.go`) — abstractions the UI depends on.
+- **MonthlyManager** (`monthly.go`) — implements `TodoRepository`: CRUD, in-memory cache keyed by `YYYYMM` (`utils.FormatDateKey`), and the `MigrateAllToYAML()` method invoked once on startup by `Application.RunMigration`.
+- **ConfigManager** (`config.go`) — implements `ConfigRepository`: loads/saves the application config.
+- **FileIOManager** (`fileio.go`) — atomic writes (`.tmp → rename`); reads YAML and the legacy TXT format from the original C++ app.
+
+> Migration is **not** a separate class — it lives as a method on `MonthlyManager` and is triggered by the App layer.
+
+#### Localization (`src/localization/`)
+
+- **English string table** (`english.go`) — currently a single English map; the structure is ready to grow into a real multi-language system, but only English ships today.
 
 #### Utils (`src/utils/`)
 
-- **Localization** — multi-language support
-- **Helpers** — helpers for date formatting, validation, etc.
+- **CustomDate** (`timeutils.go`) — `time.Time` wrapper with `FormatDateKey`, `ParseDateKey`, `IsLeapYear`, `DaysInMonth`, etc.
+- **SingleInstance** (`singleinstance.go` + `_unix.go` / `_windows.go`) — cross-platform single-instance lock used by the App layer.
 
 ### User Journey Flow
 
@@ -202,28 +224,29 @@ flowchart TD
 
     Action -->|Create a task| ClickPlus[Press the + button]
     ClickPlus --> AddForm[Task creation form]
-    AddForm --> FillForm[Fill in: title,<br/>date, priority,<br/>description, reminder]
+    AddForm --> FillForm[Fill in: title,<br/>date, place, label,<br/>kind, priority,<br/>description, reminder]
     FillForm --> SaveTask[Press Add]
-    SaveTask --> MainWindow
+    SaveTask --> SaveOnChange[(Save immediately<br/>via TodoRepository)]
+    SaveOnChange --> MainWindow
 
-    Action -->|Review tasks| ViewTasks[View the timeline]
+    Action -->|Review tasks| ViewTasks[View today's timeline]
     ViewTasks --> Navigate{Navigate}
-    Navigate -->|Different month| Arrows[Use arrows ← →<br/>to switch months]
+    Navigate -->|Different day| Arrows[Use arrows ← →<br/>to switch ±1 day]
     Navigate -->|Filter| Filter[Choose mode in ComboBox:<br/>All / Incomplete /<br/>Complete / Starred]
     Arrows --> MainWindow
     Filter --> MainWindow
 
     Action -->|Mark important| ClickStar[Click the ⭐<br/>on a task row]
     ClickStar --> Starred[Task marked<br/>as favorite]
-    Starred --> MainWindow
+    Starred --> SaveOnChange
 
     Action -->|Complete a task| ClickCheck[Click the checkbox ☐<br/>on a task row]
     ClickCheck --> Completed[Task marked ✓<br/>as done]
-    Completed --> MainWindow
+    Completed --> SaveOnChange
 
     Action -->|Use Pomodoro| ClickPomodoro[Click<br/>Pomodoro]
     ClickPomodoro --> PomodoroWindow[Pomodoro timer window]
-    PomodoroWindow --> ConfigPomodoro[Configure:<br/>- Work time<br/>- Short break<br/>- Long break]
+    PomodoroWindow --> ConfigPomodoro[Configure via PomodoroConfig:<br/>- Work time (default 25m)<br/>- Short break (5m)<br/>- Long break (15m)]
     ConfigPomodoro --> StartTimer[Press Start]
     StartTimer --> WorkSession[Focus on the task]
     WorkSession --> TimerControls{Control timer}
@@ -242,8 +265,7 @@ flowchart TD
     ToggleTheme --> MainWindow
 
     MainWindow --> Exit{Close the app?}
-    Exit -->|Yes| SaveData[Autosave<br/>to YAML]
-    SaveData --> End([Done])
+    Exit -->|Yes| End([Done — data already on disk])
     Exit -->|No| Action
 
     style Start fill:#667eea,stroke:#333,stroke-width:3px,color:#fff
@@ -253,84 +275,135 @@ flowchart TD
     style PomodoroWindow fill:#ff6b6b,stroke:#333,stroke-width:2px
     style Completed fill:#51cf66,stroke:#333,stroke-width:2px
     style Starred fill:#ffd43b,stroke:#333,stroke-width:2px
+    style SaveOnChange fill:#a5d8ff,stroke:#333,stroke-width:2px
 ```
 
-### Блок-схема Архитектуры Классов
+> **Persistence note:** there is no autosave on exit. Each add/edit/toggle/star/reorder/delete writes through the `TodoRepository` interface immediately, so closing the app simply ends the session — the data is already on disk.
+
+### Class Interaction Diagram
 
 ```mermaid
 flowchart TD
+    subgraph App["App Layer (src/app/)"]
+        Application[Application<br/>- Bootstrap<br/>- Wires dependencies<br/>- Runs migration]
+        Paths[Paths<br/>- GetDataDirectory<br/>- next to executable]
+        InstanceGuard[SingleInstanceGuard<br/>- instance.go]
+    end
+
     subgraph UI["UI Layer (src/ui/)"]
-        MainWindow[MainWindow<br/>- Main view<br/>- Navigation<br/>- Filtering]
-        TodoForm[TodoForm<br/>- Create/Edit<br/>- Validation]
-        PomodoroWin[PomodoroWindow<br/>- Timer<br/>- Settings]
-        Timeline[Timeline<br/>- Task list<br/>- Date grouping]
-        Theme[GruvboxTheme<br/>- Custom dark theme]
+        MainWindow[MainWindow<br/>- Main view<br/>- Day navigation ±1<br/>- Filtering]
+        TodoForm[TodoForm + ReminderSlider<br/>- Create/Edit<br/>- src/ui/forms/]
+        PomodoroWin[PomodoroWindow<br/>- ProgressRing<br/>- timer UI]
+        Timeline[Timeline<br/>- Renders selected day<br/>- Calls TodoItem.GetLevelColor]
+        DarkTheme[GruvboxBlackTheme<br/>- dark_theme.go]
+        LightTheme[LightSoftTheme<br/>- light_theme.go]
+        Widgets[widgets/<br/>- NumberSpinner<br/>- CustomSelect<br/>- GradientRect<br/>- *IconButton]
+        Helpers[helpers/<br/>- color, layout<br/>- theme, window]
+        Styles[styles/<br/>- constants<br/>- style_helpers]
+        Threading[threading/<br/>- main-thread dispatch]
     end
 
     subgraph Models["Models (src/models/)"]
-        TodoItem[TodoItem<br/>- Name, Content<br/>- TodoTime, Priority<br/>- Done, Starred]
-        ViewMode[ViewMode<br/>- All, Incomplete<br/>- Complete, Starred]
-        Priority[Priority<br/>- Level 0-3<br/>- Color mapping]
+        TodoItem[TodoItem<br/>- Name, Content, Place<br/>- Label, Kind, Level<br/>- TodoTime, WarnTime<br/>- Done, Starred, Order<br/>- GetLevelColor]
+        ViewMode[ViewMode<br/>- All / Incomplete<br/>- Complete / Starred]
+        PriorityLevel[PriorityLevel<br/>- typed int 0–3<br/>- Gruvbox color map]
+        Sorting[Sorting<br/>- comparators<br/>- ordering helpers]
+        PomodoroTimer[PomodoroTimer<br/>+ PomodoroConfig<br/>+ PomodoroState]
+        ConfigModel[Config / UIConfig<br/>- app settings model]
     end
 
     subgraph Persistence["Persistence Layer (src/persistence/)"]
-        MonthlyMgr[MonthlyManager<br/>- CRUD операции<br/>- In-memory cache<br/>- Индексация по YYYYMM]
-        FileIO[FileIOManager<br/>- Read/Write YAML<br/>- Legacy TXT support<br/>- Atomic operations]
-        Migration[Migration<br/>- TXT → YAML<br/>- Backward compatibility]
+        TodoRepo[/TodoRepository<br/>interface\/]
+        ConfigRepo[/ConfigRepository<br/>interface\/]
+        MonthlyMgr[MonthlyManager<br/>- impl TodoRepository<br/>- in-memory cache YYYYMM<br/>- MigrateAllToYAML]
+        ConfigMgr[ConfigManager<br/>- impl ConfigRepository]
+        FileIO[FileIOManager<br/>- atomic .tmp → rename<br/>- YAML + legacy TXT]
+    end
+
+    subgraph Localization["Localization (src/localization/)"]
+        EnglishTable[english.go<br/>- English string table]
     end
 
     subgraph Utils["Utils (src/utils/)"]
-        Localization[Localization<br/>- Multi-language support]
-        Helpers[Helpers<br/>- Date formatting<br/>- Validation]
+        CustomDate[CustomDate<br/>- timeutils.go<br/>- FormatDateKey<br/>- DaysInMonth]
+        SingleInstance[SingleInstance<br/>- cross-platform lock]
     end
 
-    subgraph Storage["File Storage (data/)"]
-        YAMLFiles[(YYYYMM.yaml<br/>Monthly files)]
-        TXTFiles[(YYYYMM.txt<br/>Legacy format)]
+    subgraph Storage["File Storage (data/ next to exe)"]
+        YAMLFiles[(YYYYMM.yaml<br/>Monthly task files)]
+        TXTFiles[(YYYYMM.txt<br/>Legacy, read-only)]
+        ConfigFile[(config.yaml)]
     end
 
-    MainWindow -->|Uses| Timeline
+    Application -->|Resolves path| Paths
+    Application -->|Guards| InstanceGuard
+    Application -->|Creates| MonthlyMgr
+    Application -->|Creates| ConfigMgr
+    Application -->|Calls MigrateAllToYAML| MonthlyMgr
+    Application -->|Injects as TodoRepository / ConfigRepository| MainWindow
+    InstanceGuard -->|Uses| SingleInstance
+    Paths -->|Locates| Storage
+
+    MainWindow -->|Hosts| Timeline
     MainWindow -->|Opens| TodoForm
     MainWindow -->|Opens| PomodoroWin
-    MainWindow -->|Applies| Theme
-    MainWindow -->|Calls| MonthlyMgr
+    MainWindow -->|Applies| DarkTheme
+    MainWindow -->|Applies| LightTheme
+    MainWindow -->|Depends on| TodoRepo
+    MainWindow -->|Depends on| ConfigRepo
+    MainWindow -->|Uses| Widgets
+    MainWindow -->|Uses| Helpers
+    MainWindow -->|Uses| Styles
+    MainWindow -->|Uses| Threading
 
-    TodoForm -->|Creates/edits| TodoItem
-    TodoForm -->|Calls| MonthlyMgr
+    TodoForm -->|Creates/Edits| TodoItem
+    TodoForm -->|Calls| TodoRepo
+    TodoForm -->|Uses| Widgets
 
     Timeline -->|Renders| TodoItem
-    Timeline -->|Uses| ViewMode
-    Timeline -->|Uses| Priority
+    Timeline -->|Filters via| ViewMode
+    Timeline -->|Sorts via| Sorting
+    Timeline -.->|Indirect color via TodoItem.GetLevelColor| PriorityLevel
 
+    PomodoroWin -->|Uses| PomodoroTimer
+
+    MonthlyMgr -.->|implements| TodoRepo
+    ConfigMgr -.->|implements| ConfigRepo
     MonthlyMgr -->|Manages| TodoItem
     MonthlyMgr -->|Uses| FileIO
-    MonthlyMgr -->|Caches in memory| Cache["In-Memory Cache<br/>Map: YYYYMM → TodoItem slice"]
+    MonthlyMgr -->|Cache YYYYMM → TodoItem slice| MonthlyMgr
+    ConfigMgr -->|Persists| ConfigModel
+    ConfigMgr -->|Uses| FileIO
 
     FileIO -->|Reads/Writes| YAMLFiles
     FileIO -->|Reads legacy| TXTFiles
-    FileIO -->|Uses| Migration
+    ConfigMgr -->|Reads/Writes| ConfigFile
 
-    Migration -->|Converts| TXTFiles
-    Migration -->|To| YAMLFiles
+    MainWindow -->|i18n strings| EnglishTable
+    TodoForm -->|i18n strings| EnglishTable
 
-    MainWindow -->|Uses| Localization
-    MainWindow -->|Uses| Helpers
-    TodoForm -->|Uses| Helpers
+    MainWindow -->|Date helpers| CustomDate
+    MonthlyMgr -->|FormatDateKey| CustomDate
 
+    style App fill:#ede7f6,stroke:#4527a0,stroke-width:2px
     style UI fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
     style Models fill:#fff3e0,stroke:#f57c00,stroke-width:2px
     style Persistence fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    style Localization fill:#e0f7fa,stroke:#00838f,stroke-width:2px
     style Utils fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
     style Storage fill:#fce4ec,stroke:#c2185b,stroke-width:2px
-    style Cache fill:#fff9c4,stroke:#f9a825,stroke-width:2px
 ```
+
+> **Reading the diagram:** `Application` is the composition root — it resolves the data directory, guards single-instance, instantiates `MonthlyManager` and `ConfigManager`, runs the legacy-TXT migration, and hands the result to `MainWindow` *as the `TodoRepository` / `ConfigRepository` interfaces*. The UI never references concrete persistence types. Migration is a method on `MonthlyManager`, not a separate component.
 
 ### Architecture Principles
 
-- **Separation of concerns:** UI is decoupled from storage; persistence is decoupled from widgets.
-- **Atomic writes:** File operations use `.tmp` → rename to avoid corruption.
-- **Caching:** MonthlyManager caches loaded months for speed.
-- **Backward compatibility:** Legacy TXT format from the original C++ app remains supported.
+- **Dependency inversion:** the UI depends on the `TodoRepository` / `ConfigRepository` interfaces; concrete implementations (`MonthlyManager`, `ConfigManager`) are constructed and injected by `Application` at startup.
+- **Separation of concerns:** UI is decoupled from storage; persistence is decoupled from widgets; bootstrap lives in its own `app/` layer.
+- **Atomic writes:** all file writes go through `FileIOManager` and use `.tmp → rename` to avoid corruption.
+- **Caching:** `MonthlyManager` keeps an in-memory cache keyed by `YYYYMM` (`utils.FormatDateKey`); a month is read once and reused across views.
+- **Save-on-change, not save-on-exit:** every CRUD/toggle/reorder writes through the repository immediately — no explicit autosave hook is needed.
+- **Backward compatibility:** the legacy TXT format from the original C++ Qt app remains readable; new writes use YAML, and `Application.RunMigration()` performs a one-shot TXT → YAML conversion via `MonthlyManager.MigrateAllToYAML()` on first run.
 
 ## Testing 🧪
 
