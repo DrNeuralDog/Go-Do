@@ -9,81 +9,94 @@ import (
 	"godo/src/ui/helpers"
 )
 
-// GruvboxBlackTheme provides a near-black Gruvbox-inspired dark theme.
-// Only color palette is customized; fonts, icons, and sizes are inherited
-// from the default dark theme for compatibility.
+var gruvboxBlackPalette = struct {
+	background      color.Color
+	foreground      color.Color
+	inputBackground color.Color
+	primary         color.Color
+	hover           color.Color
+	selection       color.Color
+	disabled        color.Color
+	separator       color.Color
+	placeholder     color.Color
+	gradientStart   color.Color
+	gradientEnd     color.Color
+}{
+	background:      helpers.Hex("#282828"),
+	foreground:      helpers.Hex("#ebdbb2"),
+	inputBackground: helpers.Hex("#3c3836"),
+	primary:         helpers.Hex("#fabd2f"),
+	hover:           helpers.Hex("#504945"),
+	selection:       helpers.Hex("#665c54"),
+	disabled:        helpers.Hex("#504945"),
+	separator:       helpers.Hex("#3c3836"),
+	placeholder:     helpers.Hex("#a89984"),
+	gradientStart:   helpers.Hex("#282828"),
+	gradientEnd:     helpers.Hex("#3c3836"),
+}
+
 type GruvboxBlackTheme struct{}
 
-// NewGruvboxBlackTheme returns a new instance of the Gruvbox black theme.
+// NewGruvboxBlackTheme creates Gruvbox black app theme
 func NewGruvboxBlackTheme() fyne.Theme {
 	return &GruvboxBlackTheme{}
 }
 
-// IsLight indicates this theme should use dark styling.
+// IsLight reports dark theme styling
 func (t *GruvboxBlackTheme) IsLight() bool { return false }
 
+// Color returns Gruvbox palette color by Fyne color name
 func (t *GruvboxBlackTheme) Color(name fyne.ThemeColorName, _ fyne.ThemeVariant) color.Color {
-	// Updated Gruvbox palette strictly matching the mockup CSS
-	// Backgrounds
-	bg := helpers.Hex("#282828")    // tasks-container bg
-	panel := helpers.Hex("#3c3836") // dropdown bg
-	// Foregrounds
-	fg := helpers.Hex("#ebdbb2")    //#ebdbb2 main text
-	muted := helpers.Hex("#a89984") // task-time
-	// Accents
-	primary := helpers.Hex("#fabd2f")   // logo, add-button bg, theme-selector text
-	focus := helpers.Hex("#fabd2f")     // focus same as primary
-	hover := helpers.Hex("#504945")     // nav-btn bg, theme-selector bg
-	selection := helpers.Hex("#665c54") // checkbox border
-	disabled := helpers.Hex("#504945")  // disabled
-	border := helpers.Hex("#3c3836")    // task-item border
-
 	switch name {
 	case theme.ColorNameBackground:
-		return bg
+		return gruvboxBlackPalette.background
+	case theme.ColorNameOverlayBackground:
+		return gruvboxBlackPalette.background
+	case theme.ColorNameMenuBackground:
+		return gruvboxBlackPalette.inputBackground
 	case theme.ColorNameForeground:
-		return fg
+		return gruvboxBlackPalette.foreground
 	case theme.ColorNameButton:
-		return primary // Use accent color for buttons
+		return gruvboxBlackPalette.primary
 	case theme.ColorNameDisabled:
-		return disabled
+		return gruvboxBlackPalette.disabled
 	case theme.ColorNameDisabledButton:
-		return disabled
+		return gruvboxBlackPalette.disabled
 	case theme.ColorNamePrimary:
-		return primary
+		return gruvboxBlackPalette.primary
 	case theme.ColorNameFocus:
-		return focus
+		return gruvboxBlackPalette.primary
 	case theme.ColorNameHover:
-		return hover
+		return gruvboxBlackPalette.hover
 	case theme.ColorNameInputBackground:
-		return panel
+		return gruvboxBlackPalette.inputBackground
 	case theme.ColorNamePlaceHolder:
-		return muted
+		return gruvboxBlackPalette.placeholder
 	case theme.ColorNameSeparator:
-		return border
+		return gruvboxBlackPalette.separator
 	case theme.ColorNameSelection:
-		return selection
+		return gruvboxBlackPalette.selection
 	default:
 		return theme.DarkTheme().Color(name, theme.VariantDark)
 	}
 }
 
-// GetHeaderGradientColors returns the two colors for the header gradient in Gruvbox theme.
-// DARK background gradient - nearly black to dark gray
+// GetHeaderGradientColors returns main window gradient colors
 func (t *GruvboxBlackTheme) GetHeaderGradientColors() (color.Color, color.Color) {
-	start := helpers.Hex("#282828") // Nearly black at top
-	end := helpers.Hex("#3c3836")   // Dark gray at bottom
-	return start, end
+	return gruvboxBlackPalette.gradientStart, gruvboxBlackPalette.gradientEnd
 }
 
+// Font returns default dark theme font
 func (t *GruvboxBlackTheme) Font(style fyne.TextStyle) fyne.Resource {
 	return theme.DarkTheme().Font(style)
 }
 
+// Icon returns default dark theme icon
 func (t *GruvboxBlackTheme) Icon(name fyne.ThemeIconName) fyne.Resource {
 	return theme.DarkTheme().Icon(name)
 }
 
+// Size returns default dark theme size
 func (t *GruvboxBlackTheme) Size(name fyne.ThemeSizeName) float32 {
 	return theme.DarkTheme().Size(name)
 }

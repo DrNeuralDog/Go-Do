@@ -8,104 +8,123 @@ import (
 	"godo/src/utils"
 )
 
+// TestSingleInstance_TryLock checks first instance lock acquisition
 func TestSingleInstance_TryLock(t *testing.T) {
-	// Create a single instance manager
+	// Берем отдельное имя, чтобы не зацепить рабочий lock
 	si := utils.NewSingleInstance("test-app-lock")
 
-	// Try to acquire the lock
 	locked, err := si.TryLock()
+
 	if err != nil {
 		t.Fatalf("Failed to acquire lock: %v", err)
 	}
+
 	if !locked {
 		t.Fatal("Expected to acquire lock, but failed")
 	}
 
-	// Verify lock file exists
+	defer si.Unlock()
+
+	// После успешного захвата файл должен лежать в temp
 	lockPath := si.GetLockPath()
 	if _, err := os.Stat(lockPath); os.IsNotExist(err) {
 		t.Fatalf("Lock file does not exist at %s", lockPath)
 	}
-
-	// Clean up
-	defer si.Unlock()
 }
 
+// TestSingleInstance_MultipleInstances checks second instance rejection
 func TestSingleInstance_MultipleInstances(t *testing.T) {
-	// Create first instance
+	// Первый экземпляр должен занять lock
 	si1 := utils.NewSingleInstance("test-multi-app")
 	locked1, err := si1.TryLock()
+
 	if err != nil {
 		t.Fatalf("Failed to acquire first lock: %v", err)
 	}
+
 	if !locked1 {
 		t.Fatal("Expected to acquire first lock, but failed")
 	}
+
 	defer si1.Unlock()
 
-	// Try to create second instance
+	// Второй экземпляр с тем же именем должен получить отказ
 	si2 := utils.NewSingleInstance("test-multi-app")
 	locked2, err := si2.TryLock()
+
 	if err != nil {
 		t.Fatalf("Unexpected error on second lock attempt: %v", err)
 	}
+
 	if locked2 {
 		t.Fatal("Expected second lock to fail, but it succeeded")
 	}
 }
 
+// TestSingleInstance_Unlock checks lock file release
 func TestSingleInstance_Unlock(t *testing.T) {
-	// Create instance and acquire lock
+	// Сначала захватываем lock обычным путем
 	si := utils.NewSingleInstance("test-unlock-app")
 	locked, err := si.TryLock()
+
 	if err != nil {
 		t.Fatalf("Failed to acquire lock: %v", err)
 	}
+
 	if !locked {
 		t.Fatal("Expected to acquire lock, but failed")
 	}
 
 	lockPath := si.GetLockPath()
 
-	// Unlock
+	// Unlock должен закрыть файл и удалить его с диска
 	err = si.Unlock()
 	if err != nil {
 		t.Fatalf("Failed to unlock: %v", err)
 	}
 
-	// Verify lock file is removed
 	if _, err := os.Stat(lockPath); !os.IsNotExist(err) {
 		t.Fatalf("Lock file still exists at %s after unlock", lockPath)
 	}
 
-	// Try to acquire lock again (should succeed)
+	// После Unlock новый экземпляр снова должен получить lock
 	si2 := utils.NewSingleInstance("test-unlock-app")
 	locked2, err := si2.TryLock()
+
 	if err != nil {
 		t.Fatalf("Failed to acquire lock after unlock: %v", err)
 	}
+
 	if !locked2 {
 		t.Fatal("Expected to acquire lock after unlock, but failed")
 	}
+
 	defer si2.Unlock()
 }
 
+// TestSingleInstance_StaleLock checks stale lock recovery
 func TestSingleInstance_StaleLock(t *testing.T) {
-	// Create a fake stale lock file with invalid PID
+	// Подкладываем битый lock, как будто прошлый процесс уже умер
 	lockPath := filepath.Join(os.TempDir(), "test-stale-app.lock")
+	_ = os.Remove(lockPath)
 
-	// Write a very high PID that likely doesn't exist
+	t.Cleanup(func() {
+		_ = os.Remove(lockPath)
+	})
+
+	// PID специально нереальный, чтобы lock считался протухшим
 	err := os.WriteFile(lockPath, []byte("999999999"), 0600)
 	if err != nil {
 		t.Fatalf("Failed to create fake lock file: %v", err)
 	}
 
-	// Try to acquire lock - should detect stale lock and succeed
 	si := utils.NewSingleInstance("test-stale-app")
 	locked, err := si.TryLock()
+
 	if err != nil {
 		t.Fatalf("Failed to acquire lock with stale lock present: %v", err)
 	}
+
 	if !locked {
 		t.Fatal("Expected to acquire lock (stale lock should be removed), but failed")
 	}
@@ -113,11 +132,12 @@ func TestSingleInstance_StaleLock(t *testing.T) {
 	defer si.Unlock()
 }
 
+// TestSingleInstance_LockPath checks generated lock path
 func TestSingleInstance_LockPath(t *testing.T) {
 	si := utils.NewSingleInstance("test-path-app")
 	lockPath := si.GetLockPath()
 
-	// Verify lock path contains temp directory and app name
+	// Путь должен указывать в temp и сохранять имя приложения
 	if lockPath == "" {
 		t.Fatal("Lock path is empty")
 	}

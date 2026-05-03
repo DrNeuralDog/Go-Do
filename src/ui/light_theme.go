@@ -9,76 +9,93 @@ import (
 	"godo/src/ui/helpers"
 )
 
-// LightSoftTheme customizes the default light theme to a softer palette
-// inspired by the Light mockup (rounded, subtle borders, warm background).
+var lightSoftPalette = struct {
+	background      color.Color
+	foreground      color.Color
+	inputBackground color.Color
+	primary         color.Color
+	separator       color.Color
+	placeholder     color.Color
+	hover           color.Color
+	disabled        color.Color
+	disabledButton  color.Color
+	gradientStart   color.Color
+	gradientEnd     color.Color
+}{
+	background:      helpers.Hex("#3c3c3c"),
+	foreground:      helpers.Hex("#3c3836"),
+	inputBackground: helpers.Hex("#ffffff"),
+	primary:         helpers.Hex("#ff8c42"),
+	separator:       helpers.Hex("#d0d0d0"),
+	placeholder:     helpers.Hex("#aaaaaa"),
+	hover:           helpers.Hex("#ffd27a"),
+	disabled:        helpers.Hex("#999999"),
+	disabledButton:  helpers.Hex("#cccccc"),
+	gradientStart:   helpers.Hex("#2a2a2a"),
+	gradientEnd:     helpers.Hex("#3c3c3c"),
+}
+
+// LightSoftTheme provides light controls on dark window background
 type LightSoftTheme struct{}
 
-func NewLightSoftTheme() fyne.Theme { return &LightSoftTheme{} }
+func NewLightSoftTheme() fyne.Theme {
+	return &LightSoftTheme{}
+}
 
-// IsLight indicates this theme should use light styling.
 func (t *LightSoftTheme) IsLight() bool { return true }
 
+// Color returns palette color by Fyne color name
 func (t *LightSoftTheme) Color(name fyne.ThemeColorName, _ fyne.ThemeVariant) color.Color {
-	// Define color palette
-	bg := helpers.Hex("#3c3c3c")       // main background - gray matching window gradient
-	fg := helpers.Hex("#3c3836")       // DARK text for main window (tasks, menus)
-	inputBg := helpers.Hex("#ffffff")  // white inputs for contrast
-	primary := helpers.Hex("#ff8c42")  // accent/add-button
-	separator := helpers.Hex("#d0d0d0") // borders
-	placeholder := helpers.Hex("#aaaaaa") // lighter muted text for visibility on gray
-	hoverColor := helpers.Hex("#ffd27a") // hover state
-
 	switch name {
 	case theme.ColorNameBackground:
-		return bg // gray background for all dialogs/windows
+		return lightSoftPalette.background
 	case theme.ColorNameOverlayBackground:
-		return bg // dialog overlay background - same gray
+		return lightSoftPalette.background
 	case theme.ColorNameMenuBackground:
-		return inputBg // white background for popup menus
+		return lightSoftPalette.inputBackground
 	case theme.ColorNameForeground:
-		return fg // DARK text for main window
+		return lightSoftPalette.foreground
 	case theme.ColorNameSeparator:
-		return separator // borders
+		return lightSoftPalette.separator
 	case theme.ColorNameInputBackground:
-		return inputBg // white inputs
+		return lightSoftPalette.inputBackground
 	case theme.ColorNamePrimary:
-		return primary // accent
+		return lightSoftPalette.primary
 	case theme.ColorNameButton:
-		return primary // buttons
+		return lightSoftPalette.primary
 	case theme.ColorNamePlaceHolder:
-		return placeholder // lighter muted text
+		return lightSoftPalette.placeholder
 	case theme.ColorNameHover:
-		return hoverColor // hover
+		return lightSoftPalette.hover
 	case theme.ColorNameFocus:
-		return primary // focus
+		return lightSoftPalette.primary
 	case theme.ColorNameSelection:
-		return separator // selection
+		return lightSoftPalette.separator
 	case theme.ColorNameDisabled:
-		return helpers.Hex("#999999") // disabled state
+		return lightSoftPalette.disabled
 	case theme.ColorNameDisabledButton:
-		return helpers.Hex("#cccccc") // disabled buttons
+		return lightSoftPalette.disabledButton
 	default:
 		return theme.LightTheme().Color(name, theme.VariantLight)
 	}
 }
 
-// GetHeaderGradientColors returns the two colors for the header gradient.
-// DARK background gradient for light theme (same as dark theme but slightly different shade)
-// Dark gradient from nearly black to dark gray
+// GetHeaderGradientColors returns main window gradient colors
 func (t *LightSoftTheme) GetHeaderGradientColors() (color.Color, color.Color) {
-	start := color.NRGBA{R: 0x2a, G: 0x2a, B: 0x2a, A: 0xFF} // #2a2a2a - Nearly black at top
-	end := color.NRGBA{R: 0x3c, G: 0x3c, B: 0x3c, A: 0xFF}   // #3c3c3c - Dark gray at bottom
-	return start, end
+	return lightSoftPalette.gradientStart, lightSoftPalette.gradientEnd
 }
 
+// Font returns default light theme font
 func (t *LightSoftTheme) Font(style fyne.TextStyle) fyne.Resource {
 	return theme.LightTheme().Font(style)
 }
 
+// Icon returns default light theme icon
 func (t *LightSoftTheme) Icon(name fyne.ThemeIconName) fyne.Resource {
 	return theme.LightTheme().Icon(name)
 }
 
+// Size returns default light theme size
 func (t *LightSoftTheme) Size(name fyne.ThemeSizeName) float32 {
 	return theme.LightTheme().Size(name)
 }

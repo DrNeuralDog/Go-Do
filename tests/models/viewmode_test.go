@@ -1,138 +1,143 @@
-package models
+package models_test
 
 import (
 	"testing"
 	"time"
+
+	"godo/src/models"
 )
 
+// TestViewModeLabels checks visible labels for all view modes
 func TestViewModeLabels(t *testing.T) {
 	tests := []struct {
-		mode     ViewMode
+		mode     models.ViewMode
 		expected string
 	}{
-		{ViewAll, "All"},
-		{ViewIncomplete, "Incomplete"},
-		{ViewReminders, "Reminders"},
+		{models.ViewAll, "All"},
+		{models.ViewIncomplete, "Incomplete"},
+		{models.ViewComplete, "Complete"},
+		{models.ViewStarred, "Important"},
 	}
 
 	for _, test := range tests {
 		result := test.mode.GetLabel()
+
 		if result != test.expected {
 			t.Errorf("GetLabel() for %v: expected %s, got %s", test.mode, test.expected, result)
 		}
 	}
 }
 
+// TestViewModeCycle checks view mode switching order
 func TestViewModeCycle(t *testing.T) {
-	// Test cycling through view modes
-	mode := ViewAll
-	expected := ViewIncomplete
-
-	result := mode.GetNextMode()
-	if result != expected {
-		t.Errorf("GetNextMode() from ViewAll: expected %v, got %v", expected, result)
+	tests := []struct {
+		name     string
+		mode     models.ViewMode
+		expected models.ViewMode
+	}{
+		{"all to incomplete", models.ViewAll, models.ViewIncomplete},
+		{"incomplete to complete", models.ViewIncomplete, models.ViewComplete},
+		{"complete to starred", models.ViewComplete, models.ViewStarred},
+		{"starred to all", models.ViewStarred, models.ViewAll},
 	}
 
-	mode = ViewIncomplete
-	expected = ViewReminders
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			result := test.mode.GetNextMode()
 
-	result = mode.GetNextMode()
-	if result != expected {
-		t.Errorf("GetNextMode() from ViewIncomplete: expected %v, got %v", expected, result)
-	}
-
-	mode = ViewReminders
-	expected = ViewAll
-
-	result = mode.GetNextMode()
-	if result != expected {
-		t.Errorf("GetNextMode() from ViewReminders: expected %v, got %v", expected, result)
+			if result != test.expected {
+				t.Errorf("GetNextMode(): expected %v, got %v", test.expected, result)
+			}
+		})
 	}
 }
 
-func TestViewModeFiltering(t *testing.T) {
-	// Create test todos
-	now := time.Now()
-
-	todos := []*TodoItem{
-		{Name: "Completed task", Done: true, TodoTime: now.Add(-time.Hour)},
-		{Name: "Incomplete task", Done: false, TodoTime: now.Add(time.Hour)},
-		{Name: "Reminder task", Done: false, TodoTime: now.Add(30 * time.Minute), WarnTime: 60},
-		{Name: "No reminder task", Done: false, TodoTime: now.Add(2 * time.Hour), WarnTime: 0},
+// TestViewModeString checks persisted values for all view modes
+func TestViewModeString(t *testing.T) {
+	tests := []struct {
+		mode     models.ViewMode
+		expected string
+	}{
+		{models.ViewAll, "all"},
+		{models.ViewIncomplete, "incomplete"},
+		{models.ViewComplete, "complete"},
+		{models.ViewStarred, "starred"},
 	}
 
-	// Test ViewAll
-	allMode := ViewAll
-	filtered := allMode.FilterItems(todos, now)
-	if len(filtered) != 4 {
-		t.Errorf("ViewAll should return all 4 items, got %d", len(filtered))
-	}
+	for _, test := range tests {
+		result := test.mode.String()
 
-	// Test ViewIncomplete
-	incompleteMode := ViewIncomplete
-	filtered = incompleteMode.FilterItems(todos, now)
-	if len(filtered) != 3 {
-		t.Errorf("ViewIncomplete should return 3 items, got %d", len(filtered))
-	}
-
-	// Check that only incomplete items are returned
-	for _, item := range filtered {
-		if item.Done {
-			t.Error("ViewIncomplete should not return completed items")
+		if result != test.expected {
+			t.Errorf("String() for %v: expected %s, got %s", test.mode, test.expected, result)
 		}
 	}
+}
 
-	// Test ViewReminders
-	reminderMode := ViewReminders
-	filtered = reminderMode.FilterItems(todos, now)
-	if len(filtered) != 1 {
-		t.Errorf("ViewReminders should return 1 item, got %d", len(filtered))
+// TestViewModeFromString checks parsing of persisted values
+func TestViewModeFromString(t *testing.T) {
+	tests := []struct {
+		value    string
+		expected models.ViewMode
+	}{
+		{"all", models.ViewAll},
+		{"incomplete", models.ViewIncomplete},
+		{"complete", models.ViewComplete},
+		{"starred", models.ViewStarred},
+		{"STARRED", models.ViewStarred},
+		{"unknown", models.ViewIncomplete},
 	}
 
-	// Check that only the reminder item is returned
-	if filtered[0].Name != "Reminder task" {
-		t.Error("ViewReminders should return only the reminder task")
+	for _, test := range tests {
+		result := models.ViewModeFromString(test.value)
+
+		if result != test.expected {
+			t.Errorf("ViewModeFromString(%q): expected %v, got %v", test.value, test.expected, result)
+		}
 	}
 }
 
-func TestViewModeFilteringWithCurrentTime(t *testing.T) {
-	// Create test todos with different reminder times
+// TestViewModeFiltering checks todo filtering rules
+func TestViewModeFiltering(t *testing.T) {
 	now := time.Now()
 
-	todos := []*TodoItem{
-		{
-			Name:     "Past reminder",
-			Done:     false,
-			TodoTime: now.Add(2 * time.Hour),
-			WarnTime: 60, // Should remind 1 hour before
-		},
-		{
-			Name:     "Future reminder",
-			Done:     false,
-			TodoTime: now.Add(2 * time.Hour),
-			WarnTime: 30, // Should remind 30 minutes before
-		},
-		{
-			Name:     "No reminder",
-			Done:     false,
-			TodoTime: now.Add(2 * time.Hour),
-			WarnTime: 0,
-		},
+	// Набор специально смешанный- завершенные незавершенные и важные задачи
+	todos := []*models.TodoItem{
+		{Name: "Completed task", Done: true, TodoTime: now.Add(-time.Hour)},
+		{Name: "Incomplete task", Done: false, TodoTime: now.Add(time.Hour)},
+		{Name: "Starred task", Done: false, Starred: true, TodoTime: now.Add(2 * time.Hour)},
+		{Name: "Completed starred task", Done: true, Starred: true, TodoTime: now.Add(3 * time.Hour)},
 	}
 
-	// Test that past reminder time doesn't trigger reminder
-	reminderMode := ViewReminders
-	filtered := reminderMode.FilterItems(todos, now)
+	tests := []struct {
+		name     string
+		mode     models.ViewMode
+		expected []string
+	}{
+		{"all", models.ViewAll, []string{"Completed task", "Incomplete task", "Starred task", "Completed starred task"}},
+		{"incomplete", models.ViewIncomplete, []string{"Incomplete task", "Starred task"}},
+		{"complete", models.ViewComplete, []string{"Completed task", "Completed starred task"}},
+		{"starred", models.ViewStarred, []string{"Starred task", "Completed starred task"}},
+	}
 
-	// The past reminder (60 min) should not trigger since it's more than 1 hour before todo time
-	// The future reminder (30 min) should trigger since it's within the reminder window
-	// The no reminder should not appear
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			filtered := test.mode.FilterItems(todos, now)
 
-	expectedCount := 1 // Only the future reminder should trigger
-	if len(filtered) != expectedCount {
-		t.Errorf("ViewReminders should return %d items, got %d", expectedCount, len(filtered))
-		for _, item := range filtered {
-			t.Logf("Returned item: %s", item.Name)
+			assertTodoNames(t, filtered, test.expected)
+		})
+	}
+}
+
+func assertTodoNames(t *testing.T, items []*models.TodoItem, expected []string) {
+	t.Helper()
+
+	if len(items) != len(expected) {
+		t.Fatalf("Expected %d items, got %d", len(expected), len(items))
+	}
+
+	for i, item := range items {
+		if item.Name != expected[i] {
+			t.Errorf("Item %d: expected %q, got %q", i, expected[i], item.Name)
 		}
 	}
 }

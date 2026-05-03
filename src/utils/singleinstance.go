@@ -6,15 +6,15 @@ import (
 	"path/filepath"
 )
 
-// SingleInstance manages application instance locking
+// SingleInstance owns process lock file
 type SingleInstance struct {
 	lockFile *os.File
+
 	lockPath string
 }
 
-// NewSingleInstance creates a new single instance manager
+// NewSingleInstance creates lock holder for app name
 func NewSingleInstance(appName string) *SingleInstance {
-	// Use system temp directory for lock file
 	tempDir := os.TempDir()
 	lockPath := filepath.Join(tempDir, fmt.Sprintf("%s.lock", appName))
 
@@ -23,39 +23,41 @@ func NewSingleInstance(appName string) *SingleInstance {
 	}
 }
 
-// TryLock attempts to acquire the instance lock
-// Returns true if lock acquired successfully, false if another instance is running
+// TryLock tries to acquire process lock
 func (si *SingleInstance) TryLock() (bool, error) {
-	// Try to create lock file with exclusive access
-	// O_CREATE | O_EXCL ensures atomic creation - fails if file exists
-	// O_RDWR for read/write access
+	// O_EXCL дает атомарный захват lock-файла
 	file, err := os.OpenFile(si.lockPath, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0600)
 
 	if err != nil {
 		if os.IsExist(err) {
-			// Lock file exists - check if it's stale
+			// Протух - lock можно удалить и попробовать снова
 			if si.isLockStale() {
-				// Remove stale lock and retry
-				os.Remove(si.lockPath)
+				if err := os.Remove(si.lockPath); err != nil {
+					return false, fmt.Errorf("failed to remove stale lock file: %w", err)
+				}
+
 				return si.TryLock()
 			}
-			// Another instance is running
+
 			return false, nil
 		}
-		// Other error occurred
+
 		return false, fmt.Errorf("failed to create lock file: %w", err)
 	}
 
-	// Write PID to lock file for debugging
+	// PID в lock-файле помогает понять, кто держит запуск
 	pid := os.Getpid()
 	_, err = file.WriteString(fmt.Sprintf("%d", pid))
+
 	if err != nil {
 		file.Close()
 		os.Remove(si.lockPath)
+
 		return false, fmt.Errorf("failed to write PID to lock file: %w", err)
 	}
 
 	si.lockFile = file
+
 	return true, nil
 }
 
@@ -63,20 +65,21 @@ func (si *SingleInstance) TryLock() (bool, error) {
 // - singleinstance_windows.go for Windows
 // - singleinstance_unix.go for Unix-like systems
 
-// Unlock releases the instance lock
+// Unlock releases process lock
 func (si *SingleInstance) Unlock() error {
 	if si.lockFile != nil {
-		// Close the file
 		err := si.lockFile.Close()
+
 		if err != nil {
 			return fmt.Errorf("failed to close lock file: %w", err)
 		}
+
 		si.lockFile = nil
 	}
 
-	// Remove the lock file
 	if _, err := os.Stat(si.lockPath); err == nil {
 		err = os.Remove(si.lockPath)
+
 		if err != nil {
 			return fmt.Errorf("failed to remove lock file: %w", err)
 		}
@@ -85,7 +88,7 @@ func (si *SingleInstance) Unlock() error {
 	return nil
 }
 
-// GetLockPath returns the path to the lock file (for debugging)
+// GetLockPath returns lock file path
 func (si *SingleInstance) GetLockPath() string {
 	return si.lockPath
 }

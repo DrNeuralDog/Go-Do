@@ -352,6 +352,10 @@ styles/
 /.vscode/
 /.claude/
 /.cursor/
+.gocache
+.gocache/
+/.gocache
+/.gocache/
 
 # Local documentation (keep out of git)
 /doc/

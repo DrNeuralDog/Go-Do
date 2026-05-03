@@ -21,7 +21,22 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-// MainWindow represents the main application window
+// mainWindowColors keeps resolved theme colors
+type mainWindowColors struct {
+	backgroundStart color.Color
+	backgroundEnd   color.Color
+	title           color.Color
+	logo            fyne.Resource
+	navBg           color.Color
+	navFg           color.Color
+	selectBg        color.Color
+	themeBg         color.Color
+	themeFg         color.Color
+	pomodoroBg      color.Color
+	pomodoroFg      color.Color
+}
+
+// MainWindow manages main app UI
 type MainWindow struct {
 	window        fyne.Window
 	dataManager   persistence.TodoRepository
@@ -30,56 +45,53 @@ type MainWindow struct {
 	todoForm      *forms.TodoForm
 	timeline      *Timeline
 
-	// UI components
 	titleLabel  *widget.Label
 	addButton   *widget.Button
 	prevButton  *widget.Button
 	nextButton  *widget.Button
-	viewModeBtn *widget.Button // legacy hidden
-	themeBtn    *widget.Button // legacy hidden
-	// Styled controls
+	viewModeBtn *widget.Button // legacy hidden control
+	themeBtn    *widget.Button // legacy hidden control
+
 	viewSelect      *widgets.CustomSelect
 	prevRectBtn     *widgets.SimpleRectButton
 	nextRectBtn     *widgets.SimpleRectButton
 	pomodoroRectBtn *widgets.SimpleRectButton
 	themeRectBtn    *widgets.SimpleRectButton
 
-	// State
-	currentDate    time.Time // Changed to time.Time for daily view
+	currentDate    time.Time
 	viewMode       models.ViewMode
 	todos          []*models.TodoItem
 	isGruvbox      bool
-	pomodoroWindow *PomodoroWindow // Reference to open pomodoro window
-	todoFormWindow fyne.Window     // Reference to open todo form window
+	pomodoroWindow *PomodoroWindow
+	todoFormWindow fyne.Window
+
+	pendingReorderYear  int
+	pendingReorderMonth int
+	pendingReorderTodos []*models.TodoItem
 }
 
-// NewMainWindow creates a new main window
+// NewMainWindow builds main application window
 func NewMainWindow(window fyne.Window, dataManager persistence.TodoRepository, configManager persistence.ConfigRepository) *MainWindow {
 	mw := &MainWindow{
 		window:        window,
 		dataManager:   dataManager,
 		configManager: configManager,
-		currentDate:   time.Now(), // Start with today
+		currentDate:   time.Now(),
 		viewMode:      models.ViewIncomplete,
 		isGruvbox:     false,
 	}
 
-	// Load configuration
 	mw.loadConfig()
 
-	// Find and set to latest day with data (if config has no saved date)
 	if mw.config.GetCurrentDate().IsZero() {
 		mw.findAndSetCurrentDateFromDataFile()
 	}
 
-	// Initialize todo form
 	mw.todoForm = forms.NewTodoForm(window, mw.dataManager)
 
-	// Initialize timeline
 	mw.timeline = NewTimeline(mw.dataManager)
 	mw.timeline.SetWindow(window)
 	mw.timeline.SetOnTodoSelected(mw.onTodoSelected)
-	// Reorder callback from timeline (manual up/down or DnD)
 	mw.timeline.SetOnTodoReorder(mw.onTodoReorder)
 	mw.timeline.SetOnReorderFinished(mw.onReorderFinished)
 	mw.timeline.SetOnTodosChanged(func() {
@@ -94,24 +106,27 @@ func NewMainWindow(window fyne.Window, dataManager persistence.TodoRepository, c
 	return mw
 }
 
-// findAndSetCurrentDateFromDataFile looks for existing data files and sets currentDate to the latest day with todos
+// findAndSetCurrentDateFromDataFile selects latest todo date from storage
 func (mw *MainWindow) findAndSetCurrentDateFromDataFile() {
 	months, err := mw.dataManager.GetAllMonths()
+
 	if err != nil {
 		return
 	}
+
 	var latestTime time.Time
 	for _, dateKey := range months {
 		year, month := utils.ParseDateKey(dateKey)
+
 		if year == 0 {
 			continue
 		}
+
 		todos, err := mw.dataManager.GetTodosForMonth(year, month)
 		if err != nil {
 			continue
 		}
 
-		// Find the latest todo time in this month
 		for _, todo := range todos {
 			if todo.TodoTime.After(latestTime) {
 				latestTime = todo.TodoTime
@@ -124,186 +139,211 @@ func (mw *MainWindow) findAndSetCurrentDateFromDataFile() {
 	}
 }
 
-// setupUI initializes the user interface
+// setupUI rebuilds main window content
 func (mw *MainWindow) setupUI() {
-	// Set window properties - matching mockup dimensions
+	mw.setupWindow()
+	mw.setupLegacyControls()
+
+	colors := mainWindowThemeColors()
+	header := createHeader(colors)
+	controls := mw.createControls(colors)
+	content := mw.createContent(header, controls, colors)
+	background := NewGradientRect(colors.backgroundStart, colors.backgroundEnd, 0)
+
+	mw.window.SetContent(container.NewMax(background, content))
+}
+
+// setupWindow applies fixed main window properties
+func (mw *MainWindow) setupWindow() {
 	mw.window.SetTitle(localization.GetString("window_title"))
 	mw.window.Resize(fyne.NewSize(MainWindowWidth, MainWindowHeight))
 	mw.window.SetFixedSize(true)
+}
 
-	// Create UI components
+// setupLegacyControls keeps old hidden controls alive
+func (mw *MainWindow) setupLegacyControls() {
 	mw.titleLabel = widget.NewLabel(localization.GetString("window_title") + " - User")
 	mw.titleLabel.Alignment = fyne.TextAlignCenter
 	mw.titleLabel.TextStyle = fyne.TextStyle{Bold: true}
-	// Disable wrapping to prevent the label from changing size
 	mw.titleLabel.Wrapping = fyne.TextTruncate
 
-	// Create buttons with icons (for dialogs etc.)
 	mw.addButton = widget.NewButtonWithIcon("", theme.ContentAddIcon(), mw.onAddButtonClicked)
 	mw.addButton.Importance = widget.HighImportance
 
-	// Legacy hidden controls for compatibility
 	mw.prevButton = widget.NewButtonWithIcon("", theme.NavigateBackIcon(), mw.onPrevDayClicked)
 	mw.prevButton.Hide()
+
 	mw.nextButton = widget.NewButtonWithIcon("", theme.NavigateNextIcon(), mw.onNextDayClicked)
 	mw.nextButton.Hide()
+
 	mw.viewModeBtn = widget.NewButton(mw.viewMode.GetLabel(), mw.onViewModeClicked)
 	mw.viewModeBtn.Hide()
+
 	mw.themeBtn = widget.NewButton("Gruvbox", mw.onThemeToggleClicked)
 	mw.themeBtn.Hide()
+}
 
-	// --- Get gradient colors from current theme (used as full-window background) ---
-	// Get gradient colors from current theme
-	var startColor, endColor color.Color
+// mainWindowThemeColors returns colors for current theme
+func mainWindowThemeColors() mainWindowColors {
+	colors := mainWindowColors{}
 	currentTheme := fyne.CurrentApp().Settings().Theme()
 	isLightTheme := helpers.IsLightTheme()
-	if gradientTheme, ok := currentTheme.(interface{ GetHeaderGradientColors() (color.Color, color.Color) }); ok {
-		startColor, endColor = gradientTheme.GetHeaderGradientColors()
+
+	if gradientTheme, ok := currentTheme.(interface {
+		GetHeaderGradientColors() (color.Color, color.Color)
+	}); ok {
+		colors.backgroundStart, colors.backgroundEnd = gradientTheme.GetHeaderGradientColors()
 	} else {
-		// Fallback to primary color if theme doesn't support gradients
-		startColor = theme.Color(theme.ColorNamePrimary)
-		endColor = startColor
+		colors.backgroundStart = theme.Color(theme.ColorNamePrimary)
+		colors.backgroundEnd = colors.backgroundStart
 	}
 
-	// Themed header icon from embedded assets and bottom-aligned with title
-	var titleColor color.Color
-	var logoRes fyne.Resource
 	if isLightTheme {
-		titleColor = color.White
-		logoRes = assets.HeaderIconLight
+		colors.title = color.White
+		colors.logo = assets.HeaderIconLight
+		colors.navBg = helpers.Hex(ColorHexAccentLight)
+		colors.navFg = color.White
+		colors.selectBg = color.White
+		colors.themeBg = helpers.Hex(ColorHexAccentLight)
+		colors.themeFg = color.White
+		colors.pomodoroBg = helpers.Hex(ColorHexAccentLight)
+		colors.pomodoroFg = color.White
 	} else {
-		titleColor = helpers.Hex(ColorHexGruvboxPrimary)
-		logoRes = assets.HeaderIconDark
+		colors.title = helpers.Hex(ColorHexGruvboxPrimary)
+		colors.logo = assets.HeaderIconDark
+		colors.navBg = helpers.Hex(ColorHexAccentDark)
+		colors.navFg = helpers.Hex(ColorHexGruvboxPrimary)
+		colors.selectBg = helpers.Hex(ColorHexGruvboxSurface)
+		colors.themeBg = helpers.Hex(ColorHexAccentDark)
+		colors.themeFg = helpers.Hex(ColorHexGruvboxPrimary)
+		colors.pomodoroBg = helpers.Hex(ColorHexAccentDark)
+		colors.pomodoroFg = helpers.Hex(ColorHexGruvboxPrimary)
 	}
-	logoImg := canvas.NewImageFromResource(logoRes)
+
+	return colors
+}
+
+// createHeader builds app logo and title
+func createHeader(colors mainWindowColors) fyne.CanvasObject {
+	logoImg := canvas.NewImageFromResource(colors.logo)
 	logoImg.FillMode = canvas.ImageFillContain
 
 	logoSize := float32(84)
 	logoImg.SetMinSize(fyne.NewSize(logoSize, logoSize))
 
-	// Title text - 56px from mockup
-	titleTxt := canvas.NewText("GO DO", titleColor)
-	titleTxt.TextSize = 64                           // From mockup
-	titleTxt.TextStyle = fyne.TextStyle{Bold: false} // Weight 300 in mockup = light, use normal
+	titleTxt := canvas.NewText("GO DO", colors.title)
+	titleTxt.TextSize = 64
+	titleTxt.TextStyle = fyne.TextStyle{Bold: false}
 
-	// Bottom-align both icon and title using VBox with spacers
-	// Calculate how much padding needed to push icon to bottom
 	iconPad := titleTxt.TextSize - logoSize
+
 	if iconPad < 0 {
 		iconPad = 0
 	}
+
 	logoAligned := container.NewVBox(
 		helpers.CreateSpacer(1, iconPad),
 		container.NewMax(logoImg),
 	)
 
-	header := container.NewHBox(logoAligned, titleTxt)
+	return container.NewHBox(logoAligned, titleTxt)
+}
 
-	// --- Controls row: [Select] [←] [→] [Add] ---
-	var navBg, navFg color.Color
-	if isLightTheme {
-		navBg = helpers.Hex(ColorHexAccentLight)
-		navFg = color.White
-	} else {
-		navBg = helpers.Hex(ColorHexAccentDark)
-		navFg = helpers.Hex(ColorHexGruvboxPrimary)
-	}
-
-	// Create custom Select widget with all view modes (no press highlight)
+// createControls builds top navigation controls
+func (mw *MainWindow) createControls(colors mainWindowColors) fyne.CanvasObject {
 	viewOptions := []string{"All", "Incomplete", "Complete", "Important"}
-	mw.viewSelect = NewCustomSelect(viewOptions, func(selected string) {
-		// Map selected string to ViewMode
-		switch selected {
-		case "All":
-			mw.viewMode = models.ViewAll
-		case "Incomplete":
-			mw.viewMode = models.ViewIncomplete
-		case "Complete":
-			mw.viewMode = models.ViewComplete
-		case "Important":
-			mw.viewMode = models.ViewStarred
-		}
-		mw.loadTodos()
-		mw.refreshView()
-		// Save config after view mode change
-		mw.saveConfig()
-	})
+	mw.viewSelect = NewCustomSelect(viewOptions, mw.onViewModeSelected)
+
 	mw.viewSelect.SetSelected(mw.viewMode.GetLabel())
 
-	// Wrap Select in styled container with white background for light theme
-	var selectBg color.Color
-	if isLightTheme {
-		selectBg = color.White
-	} else {
-		selectBg = helpers.Hex(ColorHexGruvboxSurface)
-	}
-	selectWrapper := CreateStyledSelect(mw.viewSelect, selectBg, fyne.NewSize(180, ButtonHeight), BorderRadius)
+	selectWrapper := CreateStyledSelect(mw.viewSelect, colors.selectBg, fyne.NewSize(180, ButtonHeight), BorderRadius)
 
-	mw.prevRectBtn = NewSimpleRectButton("←", navBg, navFg, fyne.NewSize(ButtonHeight, ButtonHeight), BorderRadius, mw.onPrevDayClicked)
-	mw.nextRectBtn = NewSimpleRectButton("→", navBg, navFg, fyne.NewSize(ButtonHeight, ButtonHeight), BorderRadius, mw.onNextDayClicked)
+	mw.prevRectBtn = NewSimpleRectButton("←", colors.navBg, colors.navFg, fyne.NewSize(ButtonHeight, ButtonHeight), BorderRadius, mw.onPrevDayClicked)
+	mw.nextRectBtn = NewSimpleRectButton("→", colors.navBg, colors.navFg, fyne.NewSize(ButtonHeight, ButtonHeight), BorderRadius, mw.onNextDayClicked)
 
-	// Add button (circular, replaces Pomodoro in top controls)
 	addButtonRounded := RoundedIconButton(theme.ContentAddIcon(), mw.onAddButtonClicked)
 	addWrapTop := container.NewGridWrap(fyne.NewSize(ButtonHeight, ButtonHeight), addButtonRounded)
 
-	controls := container.NewHBox(
+	return container.NewHBox(
 		selectWrapper,
 		helpers.CreateSpacer(10, 1),
+
 		mw.prevRectBtn,
 		helpers.CreateSpacer(2, 1),
+
 		mw.nextRectBtn,
 		helpers.CreateSpacer(10, 1),
 		addWrapTop,
 	)
+}
 
-	// Set up timeline with current date and view mode
+// createContent lays out main content over background
+func (mw *MainWindow) createContent(header, controls fyne.CanvasObject, colors mainWindowColors) fyne.CanvasObject {
 	mw.timeline.SetDate(mw.currentDate)
 	mw.timeline.SetViewMode(mw.viewMode)
 
-	// Create main content tasks container strictly per mockup
 	timelineCard := CreateTasksContainer(mw.timeline)
-	// Horizontal padding 24px for header and controls, top padding 30px
-	headerPadded := container.NewBorder(nil, nil, helpers.CreateSpacer(24, 1), helpers.CreateSpacer(24, 1), header)
-	controlsPadded := container.NewBorder(nil, nil, helpers.CreateSpacer(24, 1), helpers.CreateSpacer(24, 1), controls)
-	timelinePadded := container.NewBorder(nil, nil, helpers.CreateSpacer(24, 1), helpers.CreateSpacer(24, 1), timelineCard)
+	headerPadded := withHorizontalPadding(header, 24)
+	controlsPadded := withHorizontalPadding(controls, 24)
+	timelinePadded := withHorizontalPadding(timelineCard, 24)
 
-	// Build header section (fixed at top)
 	headerArea := container.NewVBox(
-		helpers.CreateSpacer(1, 15), // Reduced from 30px to 15px (2x smaller)
+		helpers.CreateSpacer(1, 15),
 		headerPadded,
 		helpers.CreateSpacer(1, 30),
 		controlsPadded,
 		helpers.CreateSpacer(1, 30),
 	)
-	topSection := headerArea
 
-	// Use Border layout to make timeline fill remaining space, with bottom margin for add button
 	appBody := container.NewBorder(
-		topSection,          // top: header + controls
-		helpers.CreateSpacer(1, 24), // bottom: 24px margin (space for add button which floats)
-		nil, nil,            // left, right
-		timelinePadded, // center: timeline fills remaining vertical space
+		headerArea,
+		helpers.CreateSpacer(1, 24),
+		nil, nil,
+		timelinePadded,
 	)
 
-	// Bottom buttons (add button in center, pomodoro on right)
-	addButtonWithMargin := mw.setupBottomButtons()
-
-	// Content stack - NO PADDING to avoid gaps
-	content := container.NewBorder(
+	return container.NewBorder(
 		nil,
-		addButtonWithMargin, // Add button with margin at bottom
+		mw.setupBottomButtons(colors),
 		nil, nil,
 		appBody,
 	)
-
-	// Full-window background gradient
-	background := NewGradientRect(startColor, endColor, 0)
-	finalContent := container.NewMax(background, content)
-	mw.window.SetContent(finalContent)
 }
 
+// withHorizontalPadding wraps object with equal side padding
+func withHorizontalPadding(object fyne.CanvasObject, padding float32) fyne.CanvasObject {
+	return container.NewBorder(nil, nil, helpers.CreateSpacer(padding, 1), helpers.CreateSpacer(padding, 1), object)
+}
+
+// onViewModeSelected applies selected filter mode
+func (mw *MainWindow) onViewModeSelected(selected string) {
+	mw.viewMode = viewModeFromLabel(selected)
+
+	mw.loadTodos()
+	mw.refreshView()
+	mw.saveConfig()
+}
+
+// viewModeFromLabel maps select label to view mode
+func viewModeFromLabel(label string) models.ViewMode {
+	switch label {
+	case "All":
+		return models.ViewAll
+	case "Incomplete":
+		return models.ViewIncomplete
+	case "Complete":
+		return models.ViewComplete
+	case "Important":
+		return models.ViewStarred
+	default:
+		return models.ViewIncomplete
+	}
+}
+
+// onThemeToggleClicked switches app theme
 func (mw *MainWindow) onThemeToggleClicked() {
 	mw.isGruvbox = !mw.isGruvbox
+
 	if mw.isGruvbox {
 		fyne.CurrentApp().Settings().SetTheme(NewGruvboxBlackTheme())
 		mw.themeBtn.SetText("Light")
@@ -311,141 +351,154 @@ func (mw *MainWindow) onThemeToggleClicked() {
 		fyne.CurrentApp().Settings().SetTheme(NewLightSoftTheme())
 		mw.themeBtn.SetText("Gruvbox")
 	}
-	// Force refresh the entire window to update header gradient
+
 	mw.setupUI()
 	mw.loadTodos()
 	mw.refreshView()
 
-	// Update pomodoro window if it's open
 	if mw.pomodoroWindow != nil {
 		mw.pomodoroWindow.UpdateTheme(mw.isGruvbox)
 	}
 
-	// Save config after theme change
 	mw.saveConfig()
 }
 
-// loadTodos loads todos for the current day
+// loadTodos loads visible todos for selected day
 func (mw *MainWindow) loadTodos() {
 	year, month := mw.currentDate.Year(), int(mw.currentDate.Month())
-
-	// Load all todos for the month
 	monthlyTodos, err := mw.dataManager.GetTodosForMonth(year, month)
+
 	if err != nil {
 		fmt.Println(localization.GetStringWithArgs("error_load_failed", err.Error()))
 		mw.todos = []*models.TodoItem{}
+
 		return
 	}
 
-	// Filter for the current day and view mode
 	currentTime := time.Now()
-	var dailyTodos []*models.TodoItem
-	startOfDay := time.Date(mw.currentDate.Year(), mw.currentDate.Month(), mw.currentDate.Day(), 0, 0, 0, 0, mw.currentDate.Location())
-	endOfDay := startOfDay.Add(24 * time.Hour)
-	for _, todo := range monthlyTodos {
-		if todo.TodoTime.After(startOfDay) && todo.TodoTime.Before(endOfDay) {
-			dailyTodos = append(dailyTodos, todo)
-		}
-	}
+	dailyTodos := mw.currentDayTodos(monthlyTodos)
 	mw.todos = mw.viewMode.FilterItems(dailyTodos, currentTime)
 
-	// Sort daily todos by implicit Order (if set), then by time (newest first)
 	models.SortTodosByOrder(mw.todos)
 }
 
-// refreshView updates the UI display
+// currentDayTodos returns todos inside selected day
+func (mw *MainWindow) currentDayTodos(todos []*models.TodoItem) []*models.TodoItem {
+	startOfDay, endOfDay := mw.currentDayRange()
+	dailyTodos := make([]*models.TodoItem, 0)
+
+	for _, todo := range todos {
+		if todo == nil {
+			continue
+		}
+
+		if todoInDay(todo, startOfDay, endOfDay) {
+			dailyTodos = append(dailyTodos, todo)
+		}
+	}
+
+	return dailyTodos
+}
+
+// currentDayRange returns inclusive start and exclusive end
+func (mw *MainWindow) currentDayRange() (time.Time, time.Time) {
+	startOfDay := time.Date(mw.currentDate.Year(), mw.currentDate.Month(), mw.currentDate.Day(), 0, 0, 0, 0, mw.currentDate.Location())
+
+	return startOfDay, startOfDay.Add(24 * time.Hour)
+}
+
+// todoInDay checks selected day bounds
+func todoInDay(todo *models.TodoItem, startOfDay, endOfDay time.Time) bool {
+	return !todo.TodoTime.Before(startOfDay) && todo.TodoTime.Before(endOfDay)
+}
+
+// refreshView syncs timeline state
 func (mw *MainWindow) refreshView() {
-	// Update timeline data
-	mw.timeline.SetDate(mw.currentDate) // Now passes full time.Time
+	mw.timeline.SetDate(mw.currentDate)
 	mw.timeline.SetViewMode(mw.viewMode)
 	mw.timeline.SetTodos(mw.todos)
+
 	mw.timeline.Refresh()
 }
 
-// Event handlers
-
+// onAddButtonClicked opens create todo form
 func (mw *MainWindow) onAddButtonClicked() {
-	// If todo form window already exists, flash it instead of opening a new one
 	if mw.todoFormWindow != nil {
 		FlashWindow(mw.todoFormWindow)
+
 		return
 	}
 
-	// Pass callback to track when window is created and closed
 	mw.todoForm.ShowCreateWindow(
 		func() {
-			// Refresh the todo list after saving
 			mw.loadTodos()
 			mw.refreshView()
 		},
 		func(win fyne.Window) {
-			// Window created - store reference
 			mw.todoFormWindow = win
 		},
 		func() {
-			// Window closed - clear reference
 			mw.todoFormWindow = nil
 		},
 	)
 }
 
+// onPrevDayClicked moves selection to previous day
 func (mw *MainWindow) onPrevDayClicked() {
 	mw.currentDate = mw.currentDate.AddDate(0, 0, -1)
+
 	mw.loadTodos()
 	mw.refreshView()
-	// Save config after date change
 	mw.saveConfig()
 }
 
+// onNextDayClicked moves selection to next day
 func (mw *MainWindow) onNextDayClicked() {
 	mw.currentDate = mw.currentDate.AddDate(0, 0, 1)
+
 	mw.loadTodos()
 	mw.refreshView()
-	// Save config after date change
 	mw.saveConfig()
 }
 
+// onViewModeClicked cycles legacy hidden view mode
 func (mw *MainWindow) onViewModeClicked() {
-	// This method is now handled by the Select widget callback
-	// Kept for backward compatibility with legacy viewModeBtn
 	mw.viewMode = mw.viewMode.GetNextMode()
+
 	if mw.viewSelect != nil {
 		mw.viewSelect.SetSelected(mw.viewMode.GetLabel())
 	}
+
 	mw.loadTodos()
 	mw.refreshView()
+	mw.saveConfig()
 }
 
+// onTodoSelected opens edit todo form
 func (mw *MainWindow) onTodoSelected(todo *models.TodoItem, todoTime time.Time) {
-	fmt.Printf("Selected todo: %s\n", todo.Name)
-
-	// If todo form window already exists, flash it instead of opening a new one
 	if mw.todoFormWindow != nil {
 		FlashWindow(mw.todoFormWindow)
+
 		return
 	}
 
-	// Open edit window with callbacks
 	mw.todoForm.ShowEditWindow(
 		todo,
 		todoTime,
 		func() {
-			// Refresh the todo list after saving
 			mw.loadTodos()
 			mw.refreshView()
 		},
 		func(win fyne.Window) {
-			// Window created - store reference
 			mw.todoFormWindow = win
 		},
 		func() {
-			// Window closed - clear reference
 			mw.todoFormWindow = nil
 		},
 	)
 }
 
-// onTodoReorder handles reorder requests from timeline (delta = -1 up, +1 down)
+// onTodoReorder moves todo inside selected day
 func (mw *MainWindow) onTodoReorder(todo *models.TodoItem, delta int) {
 	if delta == 0 || todo == nil {
 		return
@@ -453,149 +506,166 @@ func (mw *MainWindow) onTodoReorder(todo *models.TodoItem, delta int) {
 
 	year, month := mw.currentDate.Year(), int(mw.currentDate.Month())
 	monthlyTodos, err := mw.dataManager.GetTodosForMonth(year, month)
+
 	if err != nil {
 		return
 	}
 
-	// Build full list for current day (includes hidden by filter)
-	startOfDay := time.Date(mw.currentDate.Year(), mw.currentDate.Month(), mw.currentDate.Day(), 0, 0, 0, 0, mw.currentDate.Location())
-	endOfDay := startOfDay.Add(24 * time.Hour)
-	dayTodos := make([]*models.TodoItem, 0)
-	for _, t := range monthlyTodos {
-		if t.TodoTime.After(startOfDay) && t.TodoTime.Before(endOfDay) {
-			dayTodos = append(dayTodos, t)
-		}
-	}
-
-	// Sort by current visible rule (Order then time desc)
+	dayTodos := mw.currentDayTodos(monthlyTodos)
 	models.SortTodosByOrder(dayTodos)
 
-	// Find index of the item using pointer comparison for exact match
-	// This ensures we find the exact same instance even if Order was already modified
-	idx := -1
-	for i, t := range dayTodos {
-		// Compare by pointer if possible, otherwise fallback to time+name
-		if t == todo || (t.TodoTime.Equal(todo.TodoTime) && t.Name == todo.Name) {
-			idx = i
-			break
-		}
-	}
+	idx := findTodoIndex(dayTodos, todo)
 	if idx == -1 {
 		return
 	}
 
-	newIdx := idx + delta
-	if newIdx < 0 {
-		newIdx = 0
-	}
-	if newIdx >= len(dayTodos) {
-		newIdx = len(dayTodos) - 1
-	}
+	newIdx := boundedIndex(idx+delta, len(dayTodos))
 	if newIdx == idx {
 		return
 	}
 
-	// Move within slice
-	item := dayTodos[idx]
-	if newIdx > idx {
-		copy(dayTodos[idx:], dayTodos[idx+1:newIdx+1])
-	} else {
-		copy(dayTodos[newIdx+1:], dayTodos[newIdx:idx])
-	}
-	dayTodos[newIdx] = item
+	moveTodo(dayTodos, idx, newIdx)
+	assignTodoOrders(dayTodos)
+	mw.syncVisibleOrders(dayTodos)
+	mw.rememberPendingReorder(year, month, monthlyTodos)
 
-	// Reassign Order sequentially starting at 1
-	for i, t := range dayTodos {
-		t.Order = i + 1
-	}
-
-	// Synchronize Order values to visible todos list
-	// This ensures mw.todos reflects the new order even if it's a filtered subset
-	orderMap := make(map[string]int) // key: "time+name"
-	for _, t := range dayTodos {
-		key := fmt.Sprintf("%v|%s", t.TodoTime.Unix(), t.Name)
-		orderMap[key] = t.Order
-	}
-	for _, t := range mw.todos {
-		key := fmt.Sprintf("%v|%s", t.TodoTime.Unix(), t.Name)
-		if order, ok := orderMap[key]; ok {
-			t.Order = order
-		}
-	}
-
-	// Immediate UI update without disk IO: reorder visible list by new Orders
 	models.SortTodosByOrder(mw.todos)
 	mw.timeline.SetTodos(mw.todos)
+
 	mw.timeline.Refresh()
 }
 
-// onReorderFinished persists the updated order once at the end of drag
-func (mw *MainWindow) onReorderFinished() {
-	year, month := mw.currentDate.Year(), int(mw.currentDate.Month())
-	monthlyTodos, err := mw.dataManager.GetTodosForMonth(year, month)
-	if err != nil {
-		return
+// findTodoIndex returns todo position in day list
+func findTodoIndex(todos []*models.TodoItem, target *models.TodoItem) int {
+	for i, todo := range todos {
+		if todo == target || sameTodoIdentity(todo, target) {
+			return i
+		}
 	}
-	_ = mw.dataManager.SaveTodosForMonth(year, month, monthlyTodos)
+
+	return -1
 }
 
-// setupBottomButtons creates the bottom button layout with Pomodoro and theme buttons
-func (mw *MainWindow) setupBottomButtons() fyne.CanvasObject {
-	// Get theme colors
-	var themeBg, themeFg, pomodoroBg, pomodoroFg color.Color
-	if helpers.IsLightTheme() {
-		themeBg = helpers.Hex(ColorHexAccentLight)
-		themeFg = color.White
-		pomodoroBg = helpers.Hex(ColorHexAccentLight)
-		pomodoroFg = color.White
-	} else {
-		themeBg = helpers.Hex(ColorHexAccentDark)
-		themeFg = helpers.Hex(ColorHexGruvboxPrimary)
-		pomodoroBg = helpers.Hex(ColorHexAccentDark)
-		pomodoroFg = helpers.Hex(ColorHexGruvboxPrimary)
+// sameTodoIdentity compares persisted todo identity
+func sameTodoIdentity(left, right *models.TodoItem) bool {
+	if left == nil || right == nil {
+		return false
 	}
 
-	// Pomodoro button on the left (100x44px)
-	mw.pomodoroRectBtn = NewSimpleRectButton("Pomodoro", pomodoroBg, pomodoroFg, fyne.NewSize(100, ButtonHeight), BorderRadius, mw.onPomodoroTopClicked)
+	return left.TodoTime.Equal(right.TodoTime) && left.Name == right.Name
+}
 
-	// Theme toggle button on the right (with text)
+// boundedIndex keeps index inside slice bounds
+func boundedIndex(index, length int) int {
+	if index < 0 {
+		return 0
+	}
+
+	if index >= length {
+		return length - 1
+	}
+
+	return index
+}
+
+// moveTodo moves item inside slice
+func moveTodo(todos []*models.TodoItem, oldIndex, newIndex int) {
+	item := todos[oldIndex]
+
+	if newIndex > oldIndex {
+		copy(todos[oldIndex:], todos[oldIndex+1:newIndex+1])
+	} else {
+		copy(todos[newIndex+1:], todos[newIndex:oldIndex])
+	}
+
+	todos[newIndex] = item
+}
+
+// assignTodoOrders writes sequential order values
+func assignTodoOrders(todos []*models.TodoItem) {
+	for i, todo := range todos {
+		todo.Order = i + 1
+	}
+}
+
+// syncVisibleOrders updates filtered visible list order
+func (mw *MainWindow) syncVisibleOrders(dayTodos []*models.TodoItem) {
+	orderMap := make(map[string]int, len(dayTodos))
+
+	for _, todo := range dayTodos {
+		orderMap[todoIdentityKey(todo)] = todo.Order
+	}
+
+	for _, todo := range mw.todos {
+		if order, ok := orderMap[todoIdentityKey(todo)]; ok {
+			todo.Order = order
+		}
+	}
+}
+
+// todoIdentityKey returns stable key for current storage model
+func todoIdentityKey(todo *models.TodoItem) string {
+	if todo == nil {
+		return ""
+	}
+
+	return fmt.Sprintf("%d|%s", todo.TodoTime.UnixNano(), todo.Name)
+}
+
+// rememberPendingReorder stores changed monthly list for final save
+func (mw *MainWindow) rememberPendingReorder(year, month int, todos []*models.TodoItem) {
+	mw.pendingReorderYear = year
+	mw.pendingReorderMonth = month
+	mw.pendingReorderTodos = todos
+}
+
+// onReorderFinished persists reordered list once
+func (mw *MainWindow) onReorderFinished() {
+	if mw.pendingReorderTodos == nil {
+		return
+	}
+
+	if err := mw.dataManager.SaveTodosForMonth(mw.pendingReorderYear, mw.pendingReorderMonth, mw.pendingReorderTodos); err != nil {
+		fmt.Printf("Failed to save todo order: %v\n", err)
+	}
+
+	mw.pendingReorderTodos = nil
+}
+
+// setupBottomButtons creates theme and Pomodoro controls
+func (mw *MainWindow) setupBottomButtons(colors mainWindowColors) fyne.CanvasObject {
 	themeLabel := "Dark"
+
 	if mw.isGruvbox {
 		themeLabel = "Light"
-	} else {
-		themeLabel = "Dark"
 	}
 
-	// Create theme button as SimpleRectButton
-	mw.themeRectBtn = NewSimpleRectButton(themeLabel, themeBg, themeFg, fyne.NewSize(100, ButtonHeight), BorderRadius, mw.onThemeToggleClicked)
+	mw.pomodoroRectBtn = NewSimpleRectButton("Pomodoro", colors.pomodoroBg, colors.pomodoroFg, fyne.NewSize(100, ButtonHeight), BorderRadius, mw.onPomodoroTopClicked)
+	mw.themeRectBtn = NewSimpleRectButton(themeLabel, colors.themeBg, colors.themeFg, fyne.NewSize(100, ButtonHeight), BorderRadius, mw.onThemeToggleClicked)
 
-	// Create bottom button layout: theme on left, pomodoro on right with padding
 	bottomButtons := container.NewBorder(
 		nil, nil,
-		container.NewBorder(nil, nil, helpers.CreateSpacer(25, 1), nil, mw.themeRectBtn),    // 25px left margin
-		container.NewBorder(nil, nil, nil, helpers.CreateSpacer(25, 1), mw.pomodoroRectBtn), // 25px right margin
-		canvas.NewRectangle(color.Transparent),                                      // center placeholder
+		container.NewBorder(nil, nil, helpers.CreateSpacer(25, 1), nil, mw.themeRectBtn),
+		container.NewBorder(nil, nil, nil, helpers.CreateSpacer(25, 1), mw.pomodoroRectBtn),
+		canvas.NewRectangle(color.Transparent),
 	)
 
-	// Place spacer BELOW the buttons to lift them up from the bottom edge
 	return container.NewVBox(
 		bottomButtons,
 		helpers.CreateSpacer(1, 10),
 	)
 }
 
-// onPomodoroTopClicked handles the top pomodoro button click
+// onPomodoroTopClicked opens Pomodoro window
 func (mw *MainWindow) onPomodoroTopClicked() {
-	// If pomodoro window already exists, flash it instead of opening a new one
 	if mw.pomodoroWindow != nil {
 		FlashWindow(mw.pomodoroWindow.window)
+
 		return
 	}
 
-	// Create and show pomodoro window
 	mw.pomodoroWindow = NewPomodoroWindow(fyne.CurrentApp(), mw.isGruvbox)
 
-	// Set callback to clear reference when window closes
 	mw.pomodoroWindow.SetOnClosed(func() {
 		mw.pomodoroWindow = nil
 	})
@@ -603,16 +673,18 @@ func (mw *MainWindow) onPomodoroTopClicked() {
 	mw.pomodoroWindow.Show()
 }
 
-// loadConfig loads the application configuration and applies UI state
+// loadConfig loads persisted UI state
 func (mw *MainWindow) loadConfig() {
 	config, err := mw.configManager.LoadConfig()
+
 	if err != nil {
 		fmt.Printf("Failed to load config: %v, using defaults\n", err)
+
 		config = models.NewDefaultConfig()
 	}
+
 	mw.config = config
 
-	// Apply theme
 	if config.GetTheme() == "dark" {
 		mw.isGruvbox = true
 		fyne.CurrentApp().Settings().SetTheme(NewGruvboxBlackTheme())
@@ -621,18 +693,15 @@ func (mw *MainWindow) loadConfig() {
 		fyne.CurrentApp().Settings().SetTheme(NewLightSoftTheme())
 	}
 
-	// Apply view mode
 	mw.viewMode = models.ViewModeFromString(config.GetViewMode())
 
-	// Apply current date
 	if !config.GetCurrentDate().IsZero() {
 		mw.currentDate = config.GetCurrentDate()
 	}
 }
 
-// saveConfig saves the current UI state to configuration
+// saveConfig persists current UI state
 func (mw *MainWindow) saveConfig() {
-	// Update config with current UI state
 	if mw.isGruvbox {
 		mw.config.SetTheme("dark")
 	} else {
@@ -643,7 +712,6 @@ func (mw *MainWindow) saveConfig() {
 
 	mw.config.SetCurrentDate(mw.currentDate)
 
-	// Save to disk
 	if err := mw.configManager.SaveConfig(mw.config); err != nil {
 		fmt.Printf("Failed to save config: %v\n", err)
 	}

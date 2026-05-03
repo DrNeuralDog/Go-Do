@@ -16,14 +16,20 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-// PomodoroWindow represents the Pomodoro timer window
+const (
+	completionFrameDuration = 16 * time.Millisecond
+	completionAnimDuration  = 2500 * time.Millisecond
+	completionFlashEnd      = 0.33
+	completionCheckEnd      = 0.66
+)
+
+// PomodoroWindow manages Pomodoro timer UI
 type PomodoroWindow struct {
 	window    fyne.Window
 	timer     *models.PomodoroTimer
 	config    *models.PomodoroConfig
-	isGruvbox bool
+	isGruvbox bool // legacy theme flag kept for old callers
 
-	// UI components
 	timerCanvas    *canvas.Text
 	stateCanvas    *canvas.Text
 	startBtn       *widgets.SimpleRectButton
@@ -32,20 +38,18 @@ type PomodoroWindow struct {
 	sessionsCanvas *canvas.Text
 	progressRing   *ProgressRing
 
-	// Configuration inputs
 	workSpinner       *widgets.NumberSpinner
 	shortBreakSpinner *widgets.NumberSpinner
 	longBreakSpinner  *widgets.NumberSpinner
 
-	// Timer animation
 	anim           *fyne.Animation
 	lastUpdate     time.Time
-	isInitializing bool                 // prevent animation on startup
-	timerContainer *fyne.Container      // for hiding/showing digits during animation
-	lastState      models.PomodoroState // track previous state to detect transitions
+	isInitializing bool                 // blocks animation during first refresh
+	timerContainer *fyne.Container      // hides digits while completion animation runs
+	lastState      models.PomodoroState // previous state for transition detection
 }
 
-// NewPomodoroWindow creates a new Pomodoro timer window
+// NewPomodoroWindow builds Pomodoro timer window
 func NewPomodoroWindow(app fyne.App, isGruvbox bool) *PomodoroWindow {
 	config := models.NewDefaultPomodoroConfig()
 	timer := models.NewPomodoroTimer(config)
@@ -56,59 +60,56 @@ func NewPomodoroWindow(app fyne.App, isGruvbox bool) *PomodoroWindow {
 		config:         config,
 		isGruvbox:      isGruvbox,
 		lastUpdate:     time.Now().Add(-time.Second),
-		isInitializing: true,                // prevent animation on first tick
-		lastState:      models.PomodoroIdle, // track previous state
+		isInitializing: true,
+		lastState:      models.PomodoroIdle,
 	}
 
 	pw.setupUI()
 	pw.startTicker()
-	pw.tick() // initial update
+	pw.tick()
 
-	// Reset initializing flag after 2 seconds to prevent spurious animations
 	time.AfterFunc(2*time.Second, func() {
-		pw.isInitializing = false
+		runOnMainThread(func() {
+			pw.isInitializing = false
+		})
 	})
 
 	return pw
 }
 
-// setupUI initializes the user interface
+// setupUI rebuilds Pomodoro window content
 func (pw *PomodoroWindow) setupUI() {
-	// Window properties will be set after animation
-	// pw.window.Resize(fyne.NewSize(PomodoroWindowWidth, PomodoroWindowHeight))
-	// pw.window.SetFixedSize(true)
-	// pw.window.CenterOnScreen()
-
-	// Get colors based on theme (match main window)
 	var bgStart, bgEnd color.Color
 	var titleColor color.Color
+
 	currentTheme := fyne.CurrentApp().Settings().Theme()
 	isLightTheme := helpers.IsLightTheme()
-	if gradientTheme, ok := currentTheme.(interface{ GetHeaderGradientColors() (color.Color, color.Color) }); ok {
+
+	if gradientTheme, ok := currentTheme.(interface {
+		GetHeaderGradientColors() (color.Color, color.Color)
+	}); ok {
 		bgStart, bgEnd = gradientTheme.GetHeaderGradientColors()
 	} else {
 		bgStart = helpers.GetBackgroundColor()
 		bgEnd = bgStart
 	}
+
 	titleColor = color.White
+
 	if !isLightTheme {
 		titleColor = helpers.Hex("#fabd2f")
 	}
 
-	// Timer display - big digits, themed color
 	pw.timerCanvas = canvas.NewText("25:00", titleColor)
 	pw.timerCanvas.TextStyle = fyne.TextStyle{Bold: true}
 	pw.timerCanvas.TextSize = 77
 
-	// State label
 	pw.stateCanvas = canvas.NewText("Ready", titleColor)
 	pw.stateCanvas.TextSize = 18
 
-	// Sessions completed label
 	pw.sessionsCanvas = canvas.NewText("Sessions: 0", titleColor)
 	pw.sessionsCanvas.TextSize = 16
 
-	// Control buttons (match theme button styles from main window)
 	var btnBg, btnFg color.Color
 	if isLightTheme {
 		btnBg = helpers.Hex("#ff8c42")
@@ -117,9 +118,12 @@ func (pw *PomodoroWindow) setupUI() {
 		btnBg = helpers.Hex("#504945")
 		btnFg = helpers.Hex("#fabd2f")
 	}
+
 	pw.startBtn = NewSimpleRectButton("Start", btnBg, btnFg, fyne.NewSize(90, 36), 8, pw.onStartClicked)
 	pw.pauseBtn = NewSimpleRectButton("Pause", btnBg, btnFg, fyne.NewSize(90, 36), 8, pw.onPauseClicked)
+
 	pw.pauseBtn.Disable()
+
 	pw.resetBtn = NewSimpleRectButton("Reset", btnBg, btnFg, fyne.NewSize(90, 36), 8, pw.onResetClicked)
 
 	buttonRow := container.NewHBox(
@@ -128,7 +132,6 @@ func (pw *PomodoroWindow) setupUI() {
 		pw.resetBtn,
 	)
 
-	// Configuration section (labels themed, inputs as white-back spinners)
 	cfgHeader := canvas.NewText("Configuration", titleColor)
 	cfgHeader.TextStyle = fyne.TextStyle{Bold: true}
 	cfgHeader.TextSize = 30
@@ -165,6 +168,7 @@ func (pw *PomodoroWindow) setupUI() {
 			spinner,
 		)
 	}
+
 	configForm := container.NewVBox(
 		container.NewCenter(cfgHeader),
 		helpers.CreateSpacer(1, 7),
@@ -182,49 +186,55 @@ func (pw *PomodoroWindow) setupUI() {
 		),
 	)
 
-	// Progress ring colors
 	var tickBg color.Color
+
 	if isLightTheme {
 		tickBg = color.White
 	} else {
 		tickBg = helpers.Hex("#504945")
 	}
+
 	pw.progressRing = NewProgressRing(tickBg)
 
-	// Layout
-	// Wrap timer canvas so we can hide it during animation
 	pw.timerContainer = container.NewCenter(pw.timerCanvas)
 	ringWithDigits := container.NewMax(
 		container.NewCenter(pw.progressRing),
 		pw.timerContainer,
 	)
+
 	ringContainer := container.NewCenter(container.NewGridWrap(fyne.NewSize(250, 270), ringWithDigits))
 	labelsBlock := container.NewVBox(
 		container.NewCenter(pw.stateCanvas),
 		helpers.CreateSpacer(1, 33),
 		container.NewCenter(pw.sessionsCanvas),
 	)
+
 	labelHeight := labelsBlock.MinSize().Height
 	liftOffset := float32(55)
 	ringHeight := ringContainer.MinSize().Height
+
 	if ringHeight < liftOffset {
-		liftOffset = ringHeight / 2 // avoid negative spacer
+		liftOffset = ringHeight / 2
 	}
+
 	spacerBeforeLabels := ringHeight - liftOffset
-	// Overlay labels so they sit 30px closer to the ring without altering container height.
+
+	// Метки подтянуты к кольцу без изменения высоты контейнера
 	stackBase := container.NewVBox(
 		ringContainer,
 		helpers.CreateSpacer(1, labelHeight),
 	)
+
 	labelOverlay := container.NewVBox(
 		helpers.CreateSpacer(1, spacerBeforeLabels),
 		labelsBlock,
 	)
+
 	ringAndLabels := container.NewStack(stackBase, labelOverlay)
 
 	timerDisplay := container.NewVBox(
 		ringAndLabels,
-		helpers.CreateSpacer(1, 0), // ещё на ~20px ближе кнопки к индикатору
+		helpers.CreateSpacer(1, 0),
 		container.NewCenter(buttonRow),
 		helpers.CreateSpacer(1, 40),
 	)
@@ -237,7 +247,6 @@ func (pw *PomodoroWindow) setupUI() {
 		helpers.CreateSpacer(1, 20),
 	)
 
-	// Wrap in padding (24px left/right, 10px top)
 	paddedContent := container.NewBorder(
 		helpers.CreateSpacer(1, 50), nil,
 		helpers.CreateSpacer(ButtonPadding, 1),
@@ -245,7 +254,6 @@ func (pw *PomodoroWindow) setupUI() {
 		content,
 	)
 
-	// Background gradient
 	background := NewGradientRect(bgStart, bgEnd, 0)
 	finalContent := container.NewMax(background, paddedContent)
 
@@ -253,115 +261,178 @@ func (pw *PomodoroWindow) setupUI() {
 	pw.window.SetFixedSize(true)
 	pw.window.Resize(fyne.NewSize(PomodoroWindowWidth, PomodoroWindowHeight))
 	pw.window.CenterOnScreen()
-	pw.window.Show()
 }
 
-// startTicker starts the timer update ticker
+// startTicker keeps timer display synced
 func (pw *PomodoroWindow) startTicker() {
 	pw.anim = fyne.NewAnimation(time.Second, func(_ float32) {
 		now := time.Now()
 		if now.Sub(pw.lastUpdate) >= time.Second {
 			pw.lastUpdate = now
+
 			pw.tick()
 		}
 	})
+
 	pw.anim.RepeatCount = fyne.AnimationRepeatForever
 	pw.anim.Start()
 }
 
-// stopTicker stops the timer update ticker
+// stopTicker stops timer sync
 func (pw *PomodoroWindow) stopTicker() {
 	if pw.anim != nil {
 		pw.anim.Stop()
+
 		pw.anim = nil
 	}
 }
 
+// tick syncs timer state with visible controls
 func (pw *PomodoroWindow) tick() {
 	pw.timer.Update()
+
+	pw.refreshTimerText()
+
+	if pw.progressRing != nil {
+		pw.progressRing.SetProgress(pw.currentProgress())
+	}
+
+	if pw.consumePeriodCompletion() {
+		pw.playPeriodCompletion()
+	}
+
+	pw.syncButtonsState()
+}
+
+// refreshTimerText updates timer labels
+func (pw *PomodoroWindow) refreshTimerText() {
+	pw.timerCanvas.Text = pw.timerText()
+	pw.timerCanvas.Refresh()
+
+	pw.stateCanvas.Text = pw.timer.GetStateString()
+	pw.stateCanvas.Refresh()
+
+	pw.sessionsCanvas.Text = fmt.Sprintf("Sessions: %d", pw.timer.SessionsCompleted)
+	pw.sessionsCanvas.Refresh()
+}
+
+// timerText returns display text for current timer state
+func (pw *PomodoroWindow) timerText() string {
+	if pw.timer.State == models.PomodoroIdle {
+		return fmt.Sprintf("%02d:00", pw.config.WorkDuration)
+	}
 
 	minutes := int(pw.timer.TimeRemaining.Minutes())
 	seconds := int(pw.timer.TimeRemaining.Seconds()) % 60
 
-	timerText := ""
-	if pw.timer.State == models.PomodoroIdle {
-		timerText = fmt.Sprintf("%02d:00", pw.config.WorkDuration)
-	} else {
-		timerText = fmt.Sprintf("%02d:%02d", minutes, seconds)
+	return fmt.Sprintf("%02d:%02d", minutes, seconds)
+}
+
+// currentProgress returns elapsed timer progress from 0 to 1
+func (pw *PomodoroWindow) currentProgress() float32 {
+	total := pw.currentTotalDuration()
+
+	if pw.timer.State == models.PomodoroIdle || total <= 0 {
+		return 0
 	}
 
-	stateText := pw.timer.GetStateString()
-	sessionsText := fmt.Sprintf("Sessions: %d", pw.timer.SessionsCompleted)
+	elapsed := total - pw.timer.TimeRemaining
+	progress := float32(elapsed.Seconds() / total.Seconds())
 
-	pw.timerCanvas.Text = timerText
-	pw.timerCanvas.Refresh()
-	pw.stateCanvas.Text = stateText
-	pw.stateCanvas.Refresh()
-	pw.sessionsCanvas.Text = sessionsText
-	pw.sessionsCanvas.Refresh()
+	return clampProgress(progress)
+}
 
-	// Update progress ring (elapsed fraction, fills clockwise from left)
-	var prog float32 = 0
+// currentTotalDuration returns visible duration for progress ring
+func (pw *PomodoroWindow) currentTotalDuration() time.Duration {
 	total := pw.timer.GetCurrentDuration()
-	// Handle paused/unknown state by estimating total from config
-	if (pw.timer.State == models.PomodoroPaused || total == 0) && pw.timer.TimeRemaining > 0 {
-		wrk := time.Duration(pw.config.WorkDuration) * time.Minute
-		sbr := time.Duration(pw.config.ShortBreakDuration) * time.Minute
-		lbr := time.Duration(pw.config.LongBreakDuration) * time.Minute
-		// choose the smallest duration that is >= remaining as a plausible total
-		candidates := []time.Duration{wrk, sbr, lbr}
-		var best time.Duration
-		for _, d := range candidates {
-			if d >= pw.timer.TimeRemaining && (best == 0 || d < best) {
-				best = d
-			}
-		}
-		if best == 0 {
-			best = wrk
-		}
-		total = best
+
+	if pw.timer.TimeRemaining <= 0 {
+		return total
 	}
-	if pw.timer.State != models.PomodoroIdle && total > 0 {
-		// Calculate elapsed fraction instead of remaining
-		elapsed := total - pw.timer.TimeRemaining
-		prog = float32(elapsed.Seconds() / total.Seconds())
-		if prog < 0 {
-			prog = 0
-		}
-		if prog > 1 {
-			prog = 1
+
+	if pw.timer.State != models.PomodoroPaused && total != 0 {
+		return total
+	}
+
+	work := time.Duration(pw.config.WorkDuration) * time.Minute
+	shortBreak := time.Duration(pw.config.ShortBreakDuration) * time.Minute
+	longBreak := time.Duration(pw.config.LongBreakDuration) * time.Minute
+
+	// На паузе модель не хранит прошлую фазу, поэтому берем ближайшую длительность
+	candidates := []time.Duration{work, shortBreak, longBreak}
+
+	return nearestDuration(pw.timer.TimeRemaining, candidates, work)
+}
+
+// nearestDuration finds smallest duration that can contain remaining time
+func nearestDuration(remaining time.Duration, candidates []time.Duration, fallback time.Duration) time.Duration {
+	var best time.Duration
+
+	for _, duration := range candidates {
+		if duration >= remaining && (best == 0 || duration < best) {
+			best = duration
 		}
 	}
-	if pw.progressRing != nil {
-		pw.progressRing.SetProgress(prog)
 
-		// Detect transitions that mean a period just finished:
-		// - Work -> Short/Long break
-		// - Short/Long break -> Idle
-		isWorkTransition := pw.lastState == models.PomodoroWork &&
-			(pw.timer.State == models.PomodoroShortBreak || pw.timer.State == models.PomodoroLongBreak)
-		isBreakTransition := (pw.lastState == models.PomodoroShortBreak || pw.lastState == models.PomodoroLongBreak) &&
-			pw.timer.State == models.PomodoroIdle
-		periodCompleted := (isWorkTransition || isBreakTransition)
+	if best == 0 {
+		return fallback
+	}
 
-		// Update lastState for next tick
-		pw.lastState = pw.timer.State
+	return best
+}
 
-		// Trigger animation when period completes
-		if periodCompleted && !pw.isInitializing {
-			// Play completion animation (on main thread)
-			// Hide timer digits during animation
+// clampProgress keeps progress inside renderer range
+func clampProgress(progress float32) float32 {
+	if progress < 0 {
+		return 0
+	}
+
+	if progress > 1 {
+		return 1
+	}
+
+	return progress
+}
+
+// consumePeriodCompletion detects completed Pomodoro phase
+func (pw *PomodoroWindow) consumePeriodCompletion() bool {
+	isWorkTransition := pw.lastState == models.PomodoroWork &&
+		(pw.timer.State == models.PomodoroShortBreak || pw.timer.State == models.PomodoroLongBreak)
+
+	isBreakTransition := (pw.lastState == models.PomodoroShortBreak || pw.lastState == models.PomodoroLongBreak) &&
+		pw.timer.State == models.PomodoroIdle
+
+	pw.lastState = pw.timer.State
+
+	return (isWorkTransition || isBreakTransition) && !pw.isInitializing
+}
+
+// playPeriodCompletion runs completion animation
+func (pw *PomodoroWindow) playPeriodCompletion() {
+	runOnMainThread(func() {
+		if pw.timerContainer != nil {
 			pw.timerContainer.Hide()
-			pw.progressRing.PlayCompletionAnimation()
-			// Show digits again after animation (now 2.5 seconds for longer animation)
-			time.AfterFunc(2500*time.Millisecond, func() {
-				pw.timerContainer.Show()
-				pw.timerContainer.Refresh()
-			})
 		}
-	}
 
-	// Update button states
+		if pw.progressRing != nil {
+			pw.progressRing.PlayCompletionAnimation()
+		}
+	})
+
+	time.AfterFunc(completionAnimDuration, func() {
+		runOnMainThread(func() {
+			if pw.timerContainer == nil {
+				return
+			}
+
+			pw.timerContainer.Show()
+			pw.timerContainer.Refresh()
+		})
+	})
+}
+
+// syncButtonsState updates control buttons
+func (pw *PomodoroWindow) syncButtonsState() {
 	switch pw.timer.State {
 	case models.PomodoroIdle:
 		pw.startBtn.Enable()
@@ -374,7 +445,6 @@ func (pw *PomodoroWindow) tick() {
 		pw.resetBtn.Enable()
 		pw.pauseBtn.SetText("Pause")
 	case models.PomodoroPaused:
-		// When paused: only Pause button becomes Resume, Start is disabled
 		pw.startBtn.Disable()
 		pw.pauseBtn.Enable()
 		pw.resetBtn.Enable()
@@ -382,99 +452,106 @@ func (pw *PomodoroWindow) tick() {
 	}
 }
 
-// ProgressRing renders a circular segmented progress indicator.
+// ProgressRing renders segmented timer progress
 type ProgressRing struct {
 	widget.BaseWidget
-	Progress       float32     // 0..1 of elapsed progress
-	Segments       int         // number of segments around the circle
-	StartAngle     float64     // radians; 0 is right, pi is left
-	StartColor     color.Color // color at start (green)
-	EndColor       color.Color // color at end (red)
-	BgColor        color.Color // color for background segments
-	InnerRatio     float32     // inner radius ratio relative to half of min(size)
-	SegLength      float32     // length of each radial segment in px
-	StrokeWidth    float32     // thickness of each segment
-	IsCompleting   bool        // true when showing completion animation
-	CompletionAnim float32     // 0..1 animation progress for completion
+	Progress       float32     // elapsed progress from 0 to 1
+	Segments       int         // segment count around the circle
+	StartAngle     float64     // radians, 0 is right and pi is left
+	StartColor     color.Color // low progress segment color
+	EndColor       color.Color // high progress segment color
+	BgColor        color.Color // idle segment color
+	InnerRatio     float32     // inner radius ratio
+	SegLength      float32     // radial segment length
+	StrokeWidth    float32     // segment thickness
+	IsCompleting   bool        // completion animation flag
+	CompletionAnim float32     // completion animation progress from 0 to 1
 }
 
+// NewProgressRing builds segmented progress ring
 func NewProgressRing(bg color.Color) *ProgressRing {
 	pr := &ProgressRing{
 		Progress:    0,
 		Segments:    60,
-		StartAngle:  math.Pi,        // start from left side
-		StartColor:  helpers.Hex("#d65c5c"), // Red-orange - start (0% progress, warning state)
-		EndColor:    helpers.Hex("#a4d868"), // Bright vibrant green - end (100% progress, complete)
+		StartAngle:  math.Pi,
+		StartColor:  helpers.Hex("#d65c5c"),
+		EndColor:    helpers.Hex("#a4d868"),
 		BgColor:     bg,
 		InnerRatio:  1.2,
 		SegLength:   31,
 		StrokeWidth: 6,
 	}
+
 	pr.ExtendBaseWidget(pr)
+
 	return pr
 }
 
+// SetProgress updates ring progress
 func (pr *ProgressRing) SetProgress(p float32) {
-	if p < 0 {
-		p = 0
-	}
-	if p > 1 {
-		p = 1
-	}
+	p = clampProgress(p)
+
 	if pr.Progress == p {
 		return
 	}
+
 	pr.Progress = p
+
 	pr.Refresh()
 }
 
-// PlayCompletionAnimation starts the green flash + checkmark animation
+// PlayCompletionAnimation starts green flash and checkmark animation
 func (pr *ProgressRing) PlayCompletionAnimation() {
-	pr.IsCompleting = true
-	pr.CompletionAnim = 0
-	pr.Refresh()
+	runOnMainThread(func() {
+		pr.IsCompleting = true
+		pr.CompletionAnim = 0
 
-	// Animate over 2500ms using sequential timeouts
-	const frameDuration = 16 * time.Millisecond
-	const animDuration = 2500 * time.Millisecond
-	const framesCount = int(animDuration / frameDuration)
+		pr.Refresh()
+	})
+
+	const framesCount = int(completionAnimDuration / completionFrameDuration)
 
 	for frame := 0; frame <= framesCount; frame++ {
-		frame := frame // capture for closure
-		time.AfterFunc(time.Duration(frame)*frameDuration, func() {
-			if frame >= framesCount {
-				// Animation complete
-				pr.IsCompleting = false
-				pr.CompletionAnim = 0
-			} else {
-				// Calculate progress 0..1
-				pr.CompletionAnim = float32(frame) / float32(framesCount)
-			}
-			pr.Refresh()
+		frame := frame
+
+		time.AfterFunc(time.Duration(frame)*completionFrameDuration, func() {
+			runOnMainThread(func() {
+				if frame >= framesCount {
+					pr.IsCompleting = false
+					pr.CompletionAnim = 0
+				} else {
+					pr.CompletionAnim = float32(frame) / float32(framesCount)
+				}
+
+				pr.Refresh()
+			})
 		})
 	}
 }
 
+// MinSize returns fixed ring size
 func (pr *ProgressRing) MinSize() fyne.Size {
 	return fyne.NewSize(200, 200)
 }
 
+// CreateRenderer builds progress ring renderer
 func (pr *ProgressRing) CreateRenderer() fyne.WidgetRenderer {
 	lines := make([]*canvas.Line, pr.Segments)
 	objs := make([]fyne.CanvasObject, pr.Segments)
+
 	for i := 0; i < pr.Segments; i++ {
 		ln := canvas.NewLine(pr.BgColor)
 		ln.StrokeWidth = pr.StrokeWidth
 		lines[i] = ln
 		objs[i] = ln
 	}
-	// Add background circle for completion animation
+
 	completionBg := canvas.NewCircle(color.NRGBA{R: 0, G: 0, B: 0, A: 0})
-	// Add checkmark lines (enlarged, 3x scale)
-	checkLine1 := canvas.NewLine(color.NRGBA{R: 164, G: 216, B: 104, A: 255})
-	checkLine1.StrokeWidth = 10 // increased from 4
-	checkLine2 := canvas.NewLine(color.NRGBA{R: 164, G: 216, B: 104, A: 255})
-	checkLine2.StrokeWidth = 10 // increased from 4
+
+	checkLine1 := canvas.NewLine(completionGreen(0))
+	checkLine1.StrokeWidth = 10
+	checkLine2 := canvas.NewLine(completionGreen(0))
+	checkLine2.StrokeWidth = 10
 
 	objs = append(objs, completionBg, checkLine1, checkLine2)
 
@@ -497,6 +574,7 @@ type progressRingRenderer struct {
 	checkLine2   *canvas.Line
 }
 
+// Layout positions ring segments and completion overlay
 func (r *progressRingRenderer) Layout(size fyne.Size) {
 	cx := size.Width / 2
 	cy := size.Height / 2
@@ -504,8 +582,10 @@ func (r *progressRingRenderer) Layout(size fyne.Size) {
 	inner := halfMin * r.ring.InnerRatio
 	outer := inner + r.ring.SegLength
 
+	r.completionBg.Move(fyne.NewPos(0, 0))
+	r.completionBg.Resize(size)
+
 	for i := 0; i < r.ring.Segments; i++ {
-		// clockwise angle from start
 		ang := r.ring.StartAngle + 2*math.Pi*float64(i)/float64(r.ring.Segments)
 		cos := float32(math.Cos(ang))
 		sin := float32(math.Sin(ang))
@@ -519,165 +599,230 @@ func (r *progressRingRenderer) Layout(size fyne.Size) {
 	}
 }
 
+// MinSize returns renderer minimum size
 func (r *progressRingRenderer) MinSize() fyne.Size {
 	return r.ring.MinSize()
 }
 
+// Refresh applies current progress or completion animation state
 func (r *progressRingRenderer) Refresh() {
 	size := r.ring.Size()
-	cx := size.Width / 2
-	cy := size.Height / 2
+	r.Layout(size)
 
 	if r.ring.IsCompleting {
-		// Completion animation phases:
-		// 0.0-0.33: Green flash - all segments turn bright green
-		// 0.33-0.66: Show checkmark
-		// 0.66-1.0: Fade out
-		anim := r.ring.CompletionAnim
-
-		if anim < 0.33 {
-			// Flash phase - make all segments bright green
-			flashAlpha := uint8(255 * (1 - (anim / 0.33)))
-			for i := 0; i < r.ring.Segments; i++ {
-				r.lines[i].StrokeColor = color.NRGBA{R: 164, G: 216, B: 104, A: flashAlpha}
-				r.lines[i].Refresh()
-			}
-			// Green background circle
-			r.completionBg.FillColor = color.NRGBA{R: 164, G: 216, B: 104, A: uint8(100 * (1 - (anim / 0.33)))}
-		} else if anim < 0.66 {
-			// Checkmark phase - hide segments, show checkmark
-			for i := 0; i < r.ring.Segments; i++ {
-				r.lines[i].StrokeColor = r.ring.BgColor
-				r.lines[i].Refresh()
-			}
-			r.completionBg.FillColor = color.NRGBA{R: 164, G: 216, B: 104, A: 200}
-
-			// Draw checkmark lines (enlarged by 3x)
-			halfMin := float32(math.Min(float64(size.Width), float64(size.Height)) / 2)
-			checkSize := halfMin * 0.4 * 3 // 3x larger
-
-			// Checkmark starts at 30% down from center, goes to 60% down, then up-right
-			// Left diagonal: from (cx-checkSize*0.3, cy+checkSize*0.2) to (cx, cy+checkSize*0.5)
-			r.checkLine1.Position1 = fyne.NewPos(cx-checkSize*0.3, cy+checkSize*0.2)
-			r.checkLine1.Position2 = fyne.NewPos(cx, cy+checkSize*0.5)
-
-			// Right diagonal: from (cx, cy+checkSize*0.5) to (cx+checkSize*0.5, cy-checkSize*0.3)
-			r.checkLine2.Position1 = fyne.NewPos(cx, cy+checkSize*0.5)
-			r.checkLine2.Position2 = fyne.NewPos(cx+checkSize*0.5, cy-checkSize*0.3)
-
-			r.checkLine1.Refresh()
-			r.checkLine2.Refresh()
-		} else {
-			// Fade out phase
-			fadeAlpha := uint8(200 * (1 - ((anim - 0.66) / 0.34)))
-			r.completionBg.FillColor = color.NRGBA{R: 164, G: 216, B: 104, A: fadeAlpha}
-			r.completionBg.Refresh()
-
-			// Fade out checkmark
-			checkAlpha := uint8(255 * (1 - ((anim - 0.66) / 0.34)))
-			r.checkLine1.StrokeColor = color.NRGBA{R: 164, G: 216, B: 104, A: checkAlpha}
-			r.checkLine2.StrokeColor = color.NRGBA{R: 164, G: 216, B: 104, A: checkAlpha}
-			r.checkLine1.Refresh()
-			r.checkLine2.Refresh()
-		}
-	} else {
-		// Normal progress display
-		// Only show segments if progress is greater than 0
-		var filled int
-		if r.ring.Progress > 0 {
-			filled = int(float64(r.ring.Segments)*float64(r.ring.Progress) + 0.5)
-			if filled < 0 {
-				filled = 0
-			}
-			if filled > r.ring.Segments {
-				filled = r.ring.Segments
-			}
-		}
-
-		// Extract RGB components from start and end colors
-		sr, sg, sb, _ := r.ring.StartColor.RGBA()
-		er, eg, eb, _ := r.ring.EndColor.RGBA()
-
-		for i := 0; i < r.ring.Segments; i++ {
-			if i < filled {
-				// Calculate gradient color for this segment
-				t := float32(i) / float32(r.ring.Segments)
-				nr := uint8((float32(sr>>8)*(1-t) + float32(er>>8)*t))
-				ng := uint8((float32(sg>>8)*(1-t) + float32(eg>>8)*t))
-				nb := uint8((float32(sb>>8)*(1-t) + float32(eb>>8)*t))
-				r.lines[i].StrokeColor = color.RGBA{R: nr, G: ng, B: nb, A: 255}
-			} else {
-				r.lines[i].StrokeColor = r.ring.BgColor
-			}
-			r.lines[i].Refresh()
-		}
-
-		// Hide completion elements
-		r.completionBg.FillColor = color.NRGBA{R: 0, G: 0, B: 0, A: 0}
-		r.completionBg.Refresh()
-		r.checkLine1.StrokeColor = color.NRGBA{R: 0, G: 0, B: 0, A: 0}
-		r.checkLine2.StrokeColor = color.NRGBA{R: 0, G: 0, B: 0, A: 0}
-		r.checkLine1.Refresh()
-		r.checkLine2.Refresh()
+		r.refreshCompletion(size)
+		return
 	}
 
-	// ensure geometry is correct if resized
-	r.Layout(size)
+	r.refreshProgress()
 }
 
-func (r *progressRingRenderer) BackgroundColor() fyne.ThemeColorName { return "" }
-func (r *progressRingRenderer) Objects() []fyne.CanvasObject         { return r.objs }
-func (r *progressRingRenderer) Destroy()                             {}
+// refreshCompletion renders current completion animation phase
+func (r *progressRingRenderer) refreshCompletion(size fyne.Size) {
+	anim := r.ring.CompletionAnim
 
-// Event handlers
+	switch {
+	case anim < completionFlashEnd:
+		r.refreshFlashPhase(anim)
+	case anim < completionCheckEnd:
+		r.refreshCheckmarkPhase(size)
+	default:
+		r.refreshFadePhase(anim)
+	}
+}
+
+// refreshFlashPhase renders green flash
+func (r *progressRingRenderer) refreshFlashPhase(anim float32) {
+	phaseLeft := 1 - anim/completionFlashEnd
+
+	r.setSegmentsColor(completionGreen(uint8(255 * phaseLeft)))
+	r.completionBg.FillColor = completionGreen(uint8(100 * phaseLeft))
+	r.completionBg.Refresh()
+	r.hideCheckmark()
+}
+
+// refreshCheckmarkPhase renders large completion checkmark
+func (r *progressRingRenderer) refreshCheckmarkPhase(size fyne.Size) {
+	r.setSegmentsColor(r.ring.BgColor)
+
+	r.completionBg.FillColor = completionGreen(200)
+	r.completionBg.Refresh()
+
+	r.layoutCheckmark(size)
+	r.checkLine1.StrokeColor = completionGreen(255)
+	r.checkLine2.StrokeColor = completionGreen(255)
+	r.checkLine1.Refresh()
+	r.checkLine2.Refresh()
+}
+
+// refreshFadePhase fades completion checkmark out
+func (r *progressRingRenderer) refreshFadePhase(anim float32) {
+	phaseLeft := 1 - ((anim - completionCheckEnd) / (1 - completionCheckEnd))
+	phaseLeft = clampProgress(phaseLeft)
+
+	r.setSegmentsColor(r.ring.BgColor)
+
+	r.completionBg.FillColor = completionGreen(uint8(200 * phaseLeft))
+	r.completionBg.Refresh()
+
+	checkAlpha := uint8(255 * phaseLeft)
+	r.checkLine1.StrokeColor = completionGreen(checkAlpha)
+	r.checkLine2.StrokeColor = completionGreen(checkAlpha)
+	r.checkLine1.Refresh()
+	r.checkLine2.Refresh()
+}
+
+// refreshProgress renders normal segmented progress
+func (r *progressRingRenderer) refreshProgress() {
+	filled := r.filledSegments()
+
+	sr, sg, sb, _ := r.ring.StartColor.RGBA()
+	er, eg, eb, _ := r.ring.EndColor.RGBA()
+
+	for i := 0; i < r.ring.Segments; i++ {
+		if i < filled {
+			t := float32(i) / float32(r.ring.Segments)
+			r.lines[i].StrokeColor = blendedSegmentColor(t, sr, sg, sb, er, eg, eb)
+		} else {
+			r.lines[i].StrokeColor = r.ring.BgColor
+		}
+
+		r.lines[i].Refresh()
+	}
+
+	r.hideCompletionObjects()
+}
+
+// filledSegments returns number of active progress segments
+func (r *progressRingRenderer) filledSegments() int {
+	if r.ring.Progress <= 0 {
+		return 0
+	}
+
+	filled := int(float64(r.ring.Segments)*float64(r.ring.Progress) + 0.5)
+
+	if filled < 0 {
+		return 0
+	}
+
+	if filled > r.ring.Segments {
+		return r.ring.Segments
+	}
+
+	return filled
+}
+
+// setSegmentsColor applies one color to all ring segments
+func (r *progressRingRenderer) setSegmentsColor(clr color.Color) {
+	for _, line := range r.lines {
+		line.StrokeColor = clr
+		line.Refresh()
+	}
+}
+
+// layoutCheckmark positions completion checkmark
+func (r *progressRingRenderer) layoutCheckmark(size fyne.Size) {
+	cx := size.Width / 2
+	cy := size.Height / 2
+	halfMin := float32(math.Min(float64(size.Width), float64(size.Height)) / 2)
+
+	// Галочка намеренно крупная, чтобы перекрывать кольцо
+	checkSize := halfMin * 1.2
+
+	r.checkLine1.Position1 = fyne.NewPos(cx-checkSize*0.3, cy+checkSize*0.2)
+	r.checkLine1.Position2 = fyne.NewPos(cx, cy+checkSize*0.5)
+	r.checkLine2.Position1 = fyne.NewPos(cx, cy+checkSize*0.5)
+	r.checkLine2.Position2 = fyne.NewPos(cx+checkSize*0.5, cy-checkSize*0.3)
+}
+
+// hideCompletionObjects clears completion overlay
+func (r *progressRingRenderer) hideCompletionObjects() {
+	r.completionBg.FillColor = completionGreen(0)
+	r.completionBg.Refresh()
+	r.hideCheckmark()
+}
+
+// hideCheckmark clears checkmark lines
+func (r *progressRingRenderer) hideCheckmark() {
+	r.checkLine1.StrokeColor = completionGreen(0)
+	r.checkLine2.StrokeColor = completionGreen(0)
+	r.checkLine1.Refresh()
+	r.checkLine2.Refresh()
+}
+
+// blendedSegmentColor returns gradient color for segment position
+func blendedSegmentColor(t float32, sr, sg, sb, er, eg, eb uint32) color.Color {
+	nr := uint8(float32(sr>>8)*(1-t) + float32(er>>8)*t)
+	ng := uint8(float32(sg>>8)*(1-t) + float32(eg>>8)*t)
+	nb := uint8(float32(sb>>8)*(1-t) + float32(eb>>8)*t)
+
+	return color.RGBA{R: nr, G: ng, B: nb, A: 255}
+}
+
+// completionGreen returns completion animation color
+func completionGreen(alpha uint8) color.NRGBA {
+	return color.NRGBA{R: 164, G: 216, B: 104, A: alpha}
+}
+
+// BackgroundColor keeps renderer transparent
+func (r *progressRingRenderer) BackgroundColor() fyne.ThemeColorName { return "" }
+
+// Objects returns renderer canvas objects
+func (r *progressRingRenderer) Objects() []fyne.CanvasObject { return r.objs }
+
+// Destroy releases renderer resources
+func (r *progressRingRenderer) Destroy() {}
+
+// onStartClicked starts or resumes timer
 func (pw *PomodoroWindow) onStartClicked() {
 	if pw.timer.State == models.PomodoroPaused {
 		pw.timer.Resume()
 	} else {
 		pw.timer.Start()
 	}
+
 	pw.tick()
 }
 
+// onPauseClicked pauses or resumes timer
 func (pw *PomodoroWindow) onPauseClicked() {
 	if pw.timer.State == models.PomodoroPaused {
 		pw.timer.Resume()
 	} else {
 		pw.timer.Pause()
 	}
+
 	pw.tick()
 }
 
+// onResetClicked returns timer to idle state
 func (pw *PomodoroWindow) onResetClicked() {
 	pw.timer.Reset()
+
 	pw.tick()
 }
 
-// (config change handled by spinners' callbacks)
-
-// Show displays the window
+// Show displays Pomodoro window
 func (pw *PomodoroWindow) Show() {
 	pw.window.Show()
 }
 
-// SetOnClosed sets the callback for when the window is closed
+// SetOnClosed registers window close callback
 func (pw *PomodoroWindow) SetOnClosed(callback func()) {
 	pw.window.SetOnClosed(func() {
 		pw.stopTicker()
+
 		if callback != nil {
 			callback()
 		}
 	})
 }
 
-// UpdateTheme updates the theme of the pomodoro window
+// UpdateTheme rebuilds window after theme switch
 func (pw *PomodoroWindow) UpdateTheme(isGruvbox bool) {
 	pw.isGruvbox = isGruvbox
 
-	// Update the app theme first (should already be done by MainWindow)
-	// Then recreate the UI with new colors
 	pw.setupUI()
 
-	// Preserve timer state and refresh display
 	pw.tick()
 }

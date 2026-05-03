@@ -1,12 +1,16 @@
-package models
+package models_test
 
 import (
+	"image/color"
 	"testing"
 	"time"
+
+	"godo/src/models"
 )
 
+// TestNewTodoItem checks default todo item values
 func TestNewTodoItem(t *testing.T) {
-	todo := NewTodoItem()
+	todo := models.NewTodoItem()
 
 	if todo == nil {
 		t.Fatal("NewTodoItem() returned nil")
@@ -27,113 +31,121 @@ func TestNewTodoItem(t *testing.T) {
 	if todo.WarnTime != 0 {
 		t.Errorf("Expected warn time 0, got %d", todo.WarnTime)
 	}
+
+	if todo.Starred {
+		t.Error("New todo item should not be starred by default")
+	}
+
+	if todo.Order != 0 {
+		t.Errorf("Expected order 0, got %d", todo.Order)
+	}
 }
 
+// TestTodoItemSetters checks field setters
 func TestTodoItemSetters(t *testing.T) {
-	todo := NewTodoItem()
+	todo := models.NewTodoItem()
+	testTime := time.Date(2026, time.April, 29, 12, 30, 0, 0, time.UTC)
 
-	// Test name setter
-	testName := "Test Todo"
-	todo.SetName(testName)
-	if todo.Name != testName {
-		t.Errorf("Expected name %s, got %s", testName, todo.Name)
-	}
-
-	// Test content setter
-	testContent := "Test content"
-	todo.SetContent(testContent)
-	if todo.Content != testContent {
-		t.Errorf("Expected content %s, got %s", testContent, todo.Content)
-	}
-
-	// Test place setter
-	testPlace := "Test location"
-	todo.SetPlace(testPlace)
-	if todo.Place != testPlace {
-		t.Errorf("Expected place %s, got %s", testPlace, todo.Place)
-	}
-
-	// Test label setter
-	testLabel := "Test label"
-	todo.SetLabel(testLabel)
-	if todo.Label != testLabel {
-		t.Errorf("Expected label %s, got %s", testLabel, todo.Label)
-	}
-
-	// Test kind setter
+	todo.SetName("Test Todo")
+	todo.SetContent("Test content")
+	todo.SetPlace("Test location")
+	todo.SetLabel("Test label")
 	todo.SetKind(1)
+	todo.SetLevel(2)
+	todo.SetTime(testTime)
+	todo.SetWarnTime(60)
+	todo.MarkAsDone(true)
+	todo.SetOrder(10)
+
+	if todo.Name != "Test Todo" {
+		t.Errorf("Expected name %s, got %s", "Test Todo", todo.Name)
+	}
+
+	if todo.Content != "Test content" {
+		t.Errorf("Expected content %s, got %s", "Test content", todo.Content)
+	}
+
+	if todo.Place != "Test location" {
+		t.Errorf("Expected place %s, got %s", "Test location", todo.Place)
+	}
+
+	if todo.Label != "Test label" {
+		t.Errorf("Expected label %s, got %s", "Test label", todo.Label)
+	}
+
 	if todo.Kind != 1 {
 		t.Errorf("Expected kind 1, got %d", todo.Kind)
 	}
 
-	// Test level setter (should be clamped to 0-3)
-	todo.SetLevel(5)
-	if todo.Level != 0 {
-		t.Errorf("Expected level 0 (clamped), got %d", todo.Level)
-	}
-
-	todo.SetLevel(2)
 	if todo.Level != 2 {
 		t.Errorf("Expected level 2, got %d", todo.Level)
 	}
 
-	// Test time setter
-	testTime := time.Now()
-	todo.SetTime(testTime)
 	if !todo.TodoTime.Equal(testTime) {
 		t.Error("Time was not set correctly")
 	}
 
-	// Test warn time setter
-	testWarnTime := 60
-	todo.SetWarnTime(testWarnTime)
-	if todo.WarnTime != testWarnTime {
-		t.Errorf("Expected warn time %d, got %d", testWarnTime, todo.WarnTime)
+	if todo.WarnTime != 60 {
+		t.Errorf("Expected warn time 60, got %d", todo.WarnTime)
 	}
 
-	// Test mark as done
-	todo.MarkAsDone(true)
 	if !todo.Done {
 		t.Error("Todo should be marked as done")
 	}
+
+	if todo.Order != 10 {
+		t.Errorf("Expected order 10, got %d", todo.Order)
+	}
 }
 
-func TestTodoItemGetters(t *testing.T) {
-	todo := NewTodoItem()
-
-	// Set values
-	testName := "Test Todo"
-	testContent := "Test content"
-	testPlace := "Test location"
-	testLabel := "Test label"
-	testTime := time.Now()
-	testWarnTime := 30
-
-	todo.SetName(testName)
-	todo.SetContent(testContent)
-	todo.SetPlace(testPlace)
-	todo.SetLabel(testLabel)
-	todo.SetTime(testTime)
-	todo.SetWarnTime(testWarnTime)
-	todo.SetKind(1)
+// TestTodoItemSetLevelIgnoresInvalidValues checks level range guard
+func TestTodoItemSetLevelIgnoresInvalidValues(t *testing.T) {
+	todo := models.NewTodoItem()
 	todo.SetLevel(2)
-	todo.MarkAsDone(true)
 
-	// Test getters
-	if todo.GetName() != testName {
-		t.Errorf("GetName() failed: expected %s, got %s", testName, todo.GetName())
+	todo.SetLevel(5)
+
+	if todo.Level != 2 {
+		t.Errorf("Expected invalid high level to be ignored, got %d", todo.Level)
 	}
 
-	if todo.GetContent() != testContent {
-		t.Errorf("GetContent() failed: expected %s, got %s", testContent, todo.GetContent())
+	todo.SetLevel(-1)
+
+	if todo.Level != 2 {
+		t.Errorf("Expected invalid low level to be ignored, got %d", todo.Level)
+	}
+}
+
+// TestTodoItemGetters checks getter methods
+func TestTodoItemGetters(t *testing.T) {
+	testTime := time.Date(2026, time.April, 29, 18, 45, 0, 0, time.UTC)
+	todo := &models.TodoItem{
+		Name:     "Test Todo",
+		Content:  "Test content",
+		Place:    "Test location",
+		Label:    "Test label",
+		Kind:     1,
+		Level:    2,
+		TodoTime: testTime,
+		Done:     true,
+		WarnTime: 30,
+		Order:    4,
 	}
 
-	if todo.GetPlace() != testPlace {
-		t.Errorf("GetPlace() failed: expected %s, got %s", testPlace, todo.GetPlace())
+	if todo.GetName() != "Test Todo" {
+		t.Errorf("GetName() failed: expected %s, got %s", "Test Todo", todo.GetName())
 	}
 
-	if todo.GetLabel() != testLabel {
-		t.Errorf("GetLabel() failed: expected %s, got %s", testLabel, todo.GetLabel())
+	if todo.GetContent() != "Test content" {
+		t.Errorf("GetContent() failed: expected %s, got %s", "Test content", todo.GetContent())
+	}
+
+	if todo.GetPlace() != "Test location" {
+		t.Errorf("GetPlace() failed: expected %s, got %s", "Test location", todo.GetPlace())
+	}
+
+	if todo.GetLabel() != "Test label" {
+		t.Errorf("GetLabel() failed: expected %s, got %s", "Test label", todo.GetLabel())
 	}
 
 	if todo.GetKind() != 1 {
@@ -148,18 +160,25 @@ func TestTodoItemGetters(t *testing.T) {
 		t.Error("GetTime() failed: time not equal")
 	}
 
-	if todo.GetWarnTime() != testWarnTime {
-		t.Errorf("GetWarnTime() failed: expected %d, got %d", testWarnTime, todo.GetWarnTime())
+	if todo.GetWarnTime() != 30 {
+		t.Errorf("GetWarnTime() failed: expected 30, got %d", todo.GetWarnTime())
+	}
+
+	if !todo.IsDone() {
+		t.Error("IsDone() failed: should return true")
 	}
 
 	if !todo.HaveDone() {
 		t.Error("HaveDone() failed: should return true")
 	}
+
+	if todo.GetOrder() != 4 {
+		t.Errorf("GetOrder() failed: expected 4, got %d", todo.GetOrder())
+	}
 }
 
+// TestTodoItemLevelStrings checks priority text values
 func TestTodoItemLevelStrings(t *testing.T) {
-	todo := NewTodoItem()
-
 	tests := []struct {
 		level    int
 		expected string
@@ -172,98 +191,123 @@ func TestTodoItemLevelStrings(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		todo.SetLevel(test.level)
+		todo := &models.TodoItem{Level: test.level}
 		result := todo.GetLevelString()
+
 		if result != test.expected {
 			t.Errorf("GetLevelString() for level %d: expected %s, got %s", test.level, test.expected, result)
 		}
 	}
 }
 
+// TestTodoItemLevelColors checks priority color values
 func TestTodoItemLevelColors(t *testing.T) {
-	todo := NewTodoItem()
-
 	tests := []struct {
 		level    int
-		expected string
+		expected color.RGBA
 	}{
-		{0, "#4CAF50"},
-		{1, "#2196F3"},
-		{2, "#FF9800"},
-		{3, "#F44336"},
+		{0, color.RGBA{R: 184, G: 187, B: 38, A: 255}},
+		{1, color.RGBA{R: 131, G: 165, B: 152, A: 255}},
+		{2, color.RGBA{R: 254, G: 128, B: 25, A: 255}},
+		{3, color.RGBA{R: 251, G: 73, B: 52, A: 255}},
+		{5, color.RGBA{R: 184, G: 187, B: 38, A: 255}},
 	}
 
 	for _, test := range tests {
-		todo.SetLevel(test.level)
+		todo := &models.TodoItem{Level: test.level}
 		result := todo.GetLevelColor()
+
 		if result != test.expected {
-			t.Errorf("GetLevelColor() for level %d: expected %s, got %s", test.level, test.expected, result)
+			t.Errorf("GetLevelColor() for level %d: expected %#v, got %#v", test.level, test.expected, result)
 		}
 	}
 }
 
+// TestTodoItemKindString checks kind labels
 func TestTodoItemKindString(t *testing.T) {
-	todo := NewTodoItem()
-
-	todo.SetKind(0)
-	if todo.GetKindString() != "Event" {
-		t.Errorf("Expected 'Event', got %s", todo.GetKindString())
+	tests := []struct {
+		kind     int
+		expected string
+	}{
+		{0, "Event"},
+		{1, "Task"},
+		{9, "Task"},
 	}
 
-	todo.SetKind(1)
-	if todo.GetKindString() != "Task" {
-		t.Errorf("Expected 'Task', got %s", todo.GetKindString())
+	for _, test := range tests {
+		todo := &models.TodoItem{Kind: test.kind}
+		result := todo.GetKindString()
+
+		if result != test.expected {
+			t.Errorf("GetKindString() for kind %d: expected %s, got %s", test.kind, test.expected, result)
+		}
 	}
 }
 
+// TestTodoItemIsBefore checks chronological comparison
 func TestTodoItemIsBefore(t *testing.T) {
-	todo1 := NewTodoItem()
-	todo2 := NewTodoItem()
+	now := time.Date(2026, time.April, 29, 10, 0, 0, 0, time.UTC)
+	earlier := &models.TodoItem{TodoTime: now}
+	later := &models.TodoItem{TodoTime: now.Add(time.Hour)}
 
-	// Set different times
-	now := time.Now()
-	todo1.SetTime(now)
-	todo2.SetTime(now.Add(time.Hour))
-
-	if !todo2.IsBefore(todo1) {
-		t.Error("todo2 should be before todo1")
+	if !earlier.IsBefore(later) {
+		t.Error("Earlier todo should be before later todo")
 	}
 
-	if todo1.IsBefore(todo2) {
-		t.Error("todo1 should not be before todo2")
+	if later.IsBefore(earlier) {
+		t.Error("Later todo should not be before earlier todo")
 	}
 }
 
+// TestTodoItemShouldRemind checks reminder window logic
 func TestTodoItemShouldRemind(t *testing.T) {
-	todo := NewTodoItem()
-	currentTime := time.Now()
+	now := time.Date(2026, time.April, 29, 10, 0, 0, 0, time.UTC)
 
-	// Test with no warning time
-	todo.SetWarnTime(0)
-	if todo.ShouldRemind(currentTime) {
-		t.Error("Should not remind when warn time is 0")
+	tests := []struct {
+		name     string
+		todo     *models.TodoItem
+		at       time.Time
+		expected bool
+	}{
+		{
+			name:     "without warn time",
+			todo:     &models.TodoItem{TodoTime: now.Add(time.Hour)},
+			at:       now,
+			expected: false,
+		},
+		{
+			name:     "done todo",
+			todo:     &models.TodoItem{Done: true, WarnTime: 60, TodoTime: now.Add(time.Hour)},
+			at:       now,
+			expected: false,
+		},
+		{
+			name:     "inside reminder window",
+			todo:     &models.TodoItem{WarnTime: 60, TodoTime: now.Add(30 * time.Minute)},
+			at:       now,
+			expected: true,
+		},
+		{
+			name:     "before reminder window",
+			todo:     &models.TodoItem{WarnTime: 30, TodoTime: now.Add(time.Hour)},
+			at:       now,
+			expected: false,
+		},
+		{
+			name:     "after todo time",
+			todo:     &models.TodoItem{WarnTime: 60, TodoTime: now.Add(-time.Minute)},
+			at:       now,
+			expected: false,
+		},
 	}
 
-	// Test with warning time but item is done
-	todo.SetWarnTime(60)
-	todo.MarkAsDone(true)
-	if todo.ShouldRemind(currentTime) {
-		t.Error("Should not remind when item is done")
-	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			result := test.todo.ShouldRemind(test.at)
 
-	// Test with warning time and item not done
-	todo.MarkAsDone(false)
-	futureTime := currentTime.Add(30 * time.Minute)
-	todo.SetTime(futureTime)
-
-	// Should remind if current time is after remind time but before todo time
-	if !todo.ShouldRemind(currentTime) {
-		t.Error("Should remind when current time is after remind time")
-	}
-
-	// Should not remind if current time is before remind time
-	pastTime := currentTime.Add(-2 * time.Hour)
-	if todo.ShouldRemind(pastTime) {
-		t.Error("Should not remind when current time is before remind time")
+			if result != test.expected {
+				t.Errorf("ShouldRemind(): expected %v, got %v", test.expected, result)
+			}
+		})
 	}
 }

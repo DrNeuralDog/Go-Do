@@ -1,40 +1,46 @@
-// go:build !windows
+//go:build !windows
 // +build !windows
 
 package utils
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"syscall"
 )
 
-// isLockStale checks if the lock file belongs to a dead process (Unix version)
+// isLockStale reports whether lock file points to inactive process
 func (si *SingleInstance) isLockStale() bool {
-	// Read PID from lock file
 	data, err := os.ReadFile(si.lockPath)
+
 	if err != nil {
-		return true // Can't read, consider it stale
+		return true
 	}
 
 	var pid int
 	_, err = fmt.Sscanf(string(data), "%d", &pid)
-	if err != nil {
-		return true // Invalid PID format, consider it stale
+
+	if err != nil || pid <= 0 {
+		return true
 	}
 
-	// Check if process exists using kill with signal 0
-	// Signal 0 doesn't actually send a signal but checks if process exists
 	process, err := os.FindProcess(pid)
+
 	if err != nil {
-		return true // Process doesn't exist
+		return true
 	}
 
-	// Send signal 0 to check if process is alive
+	// Signal 0 только проверяет существование процесса
 	err = process.Signal(syscall.Signal(0))
-	if err != nil {
-		return true // Process doesn't exist or we can't signal it
+
+	if errors.Is(err, syscall.EPERM) {
+		return false
 	}
 
-	return false // Process exists, lock is valid
+	if err != nil {
+		return true
+	}
+
+	return false
 }
