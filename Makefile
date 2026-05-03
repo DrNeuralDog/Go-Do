@@ -14,8 +14,9 @@ BINARY_WINDOWS=$(BINARY_NAME).exe
 BINARY_LINUX=$(BINARY_NAME)
 BINARY_MACOS=$(BINARY_NAME)
 BUILD_DIR=bin
-APP_ID=com.sekinnovikov.godo
-ICON_PATH=$(CURDIR)/doc/Icons/Icon_Work_Version.png
+ICON_SOURCE=$(CURDIR)/resources/Icons/icon_256.png
+ICON_ICO=$(CURDIR)/build/Icon_Work_Version.ico
+RESOURCE_SYSO=$(CURDIR)/src/rsrc_windows_amd64.syso
 
 # Build targets
 .PHONY: all build clean test deps help package-windows package-all generate-ico embed-ico build-windows-ico
@@ -95,8 +96,7 @@ init:
 package-windows:
 	@echo "Packaging Windows EXE with icon..."
 	@powershell -NoProfile -Command "if (-not (Test-Path '$(BUILD_DIR)')) { New-Item -ItemType Directory -Path '$(BUILD_DIR)' | Out-Null }"
-	@powershell -NoProfile -Command "$$env:GOFLAGS='-buildvcs=false'; $$env:CGO_CFLAGS='-O2 -g -fno-stack-protector'; $$env:CGO_CXXFLAGS='-O2 -g -fno-stack-protector'; $$env:CGO_LDFLAGS='-lssp'; fyne package -os windows -src src -icon '$(ICON_PATH)' -name GoDo --app-id $(APP_ID) -release"
-	@powershell -NoProfile -Command "Remove-Item -Force -ErrorAction SilentlyContinue .\\$(BUILD_DIR)\\$(BINARY_WINDOWS); Move-Item -Force .\\src\\$(BINARY_WINDOWS) .\\$(BUILD_DIR)\\$(BINARY_WINDOWS)"
+	@powershell -NoProfile -Command "$$env:GOOS='windows'; $$env:GOARCH='amd64'; $$env:GOFLAGS='-buildvcs=false'; $$env:CGO_CFLAGS='-O2 -g -fno-stack-protector'; $$env:CGO_CXXFLAGS='-O2 -g -fno-stack-protector'; $$env:CGO_LDFLAGS='-lssp'; go build -ldflags='-H windowsgui' -o .\\$(BUILD_DIR)\\$(BINARY_WINDOWS) .\\src\\main.go"
 
 # Package for all platforms (Windows packaging includes icon)
 package-all: package-windows
@@ -105,14 +105,14 @@ package-all: package-windows
 # 1. Convert PNG icon to ICO via PowerShell (.NET) at 256x256
 generate-ico:
 	@echo "Generating .ico from PNG..."
-	@mkdir -p build
-	@powershell -NoProfile -Command "Add-Type -AssemblyName System.Drawing; $src='doc/Icons/Icon_Work_Version.png'; $dst='build/Icon_Work_Version.ico'; $bmp=New-Object System.Drawing.Bitmap($src); $bmp256=New-Object System.Drawing.Bitmap($bmp,256,256); $icon=[System.Drawing.Icon]::FromHandle(($bmp256.GetHicon())); $fs=New-Object System.IO.FileStream($dst,[System.IO.FileMode]::Create); $icon.Save($fs); $fs.Close(); $icon.Dispose(); $bmp256.Dispose(); $bmp.Dispose();"
+	@powershell -NoProfile -Command "if (-not (Test-Path 'build')) { New-Item -ItemType Directory -Path 'build' | Out-Null }"
+	@powershell -NoProfile -Command "Add-Type -AssemblyName System.Drawing; $$src='$(ICON_SOURCE)'; $$dst='$(ICON_ICO)'; $$bmp=New-Object System.Drawing.Bitmap($$src); $$bmp256=New-Object System.Drawing.Bitmap($$bmp,256,256); $$icon=[System.Drawing.Icon]::FromHandle(($$bmp256.GetHicon())); $$fs=New-Object System.IO.FileStream($$dst,[System.IO.FileMode]::Create); $$icon.Save($$fs); $$fs.Close(); $$icon.Dispose(); $$bmp256.Dispose(); $$bmp.Dispose();"
 
 # 2. Embed ICO into resource.syso using rsrc and then build EXE
 embed-ico: generate-ico
 	@echo "Embedding ICO into resource.syso..."
-	@$(GOCMD) install github.com/akavel/rsrc@latest
-	@rsrc -ico build/Icon_Work_Version.ico -o resource.syso
+	@powershell -NoProfile -Command "if (-not (Get-Command rsrc -ErrorAction SilentlyContinue)) { go install github.com/akavel/rsrc@latest }"
+	@rsrc -arch amd64 -ico "$(ICON_ICO)" -o "$(RESOURCE_SYSO)"
 
 # 3.Build Windows exe that picks up resource.syso->icon appears in Explorer
 build-windows-ico: embed-ico
