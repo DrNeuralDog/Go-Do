@@ -5,33 +5,37 @@ import (
 	"time"
 )
 
-// TodoItem represents a single todo item with all its properties
-// This struct matches the original C++ TodoItem class structure
+// Todo kind values match old storage
+const (
+	TodoKindEvent = iota
+	TodoKindTask
+)
+
+// TodoItem stores one task or event
 type TodoItem struct {
-	Name     string    `json:"name"`                                   // Todo item name
-	Content  string    `json:"content"`                                // Detailed content/description
-	Place    string    `json:"place"`                                  // Location information
-	Label    string    `json:"label"`                                  // Custom label/tag
-	Kind     int       `json:"kind"`                                   // Type: 0=Event, 1=Task
-	Level    int       `json:"level"`                                  // Priority level: 0=Low, 1=Medium, 2=High, 3=Urgent
-	TodoTime time.Time `json:"todoTime"`                               // Due date and time
-	Done     bool      `json:"done"`                                   // Completion status
-	WarnTime int       `json:"warnTime"`                               // Reminder time in minutes before due time
-	Starred  bool      `json:"starred"`                                // Mark as important
-	Order    int       `json:"order,omitempty" yaml:"order,omitempty"` // Implicit UI order within a day (0 = unset)
+	Name     string    `json:"name"`
+	Content  string    `json:"content"`
+	Place    string    `json:"place"`
+	Label    string    `json:"label"`
+	Kind     int       `json:"kind"`
+	Level    int       `json:"level"`
+	TodoTime time.Time `json:"todoTime"`
+	Done     bool      `json:"done"`
+	WarnTime int       `json:"warnTime"`
+	Starred  bool      `json:"starred"`
+	Order    int       `json:"order,omitempty" yaml:"order,omitempty"`
 }
 
-// NewTodoItem creates a new TodoItem with default values
+// NewTodoItem creates default todo
 func NewTodoItem() *TodoItem {
 	return &TodoItem{
-		Kind:    0, // Default to Event
-		Level:   0, // Default to lowest priority
+		Kind:    TodoKindEvent,
+		Level:   int(PriorityLow),
 		Done:    false,
 		Starred: false,
 	}
 }
 
-// Setters
 func (t *TodoItem) SetName(name string) {
 	t.Name = name
 }
@@ -53,7 +57,7 @@ func (t *TodoItem) SetKind(kind int) {
 }
 
 func (t *TodoItem) SetLevel(level int) {
-	if level >= 0 && level <= 3 {
+	if level >= int(PriorityLow) && level <= int(PriorityUrgent) {
 		t.Level = level
 	}
 }
@@ -70,17 +74,16 @@ func (t *TodoItem) MarkAsDone(done bool) {
 	t.Done = done
 }
 
-// SetOrder sets the implicit order value for UI sorting within the same day
+// SetOrder sets UI order inside one day
 func (t *TodoItem) SetOrder(order int) {
 	t.Order = order
 }
 
-// GetOrder returns the implicit UI order value
+// GetOrder returns UI order
 func (t *TodoItem) GetOrder() int {
 	return t.Order
 }
 
-// Getters
 func (t *TodoItem) GetName() string {
 	return t.Name
 }
@@ -117,62 +120,42 @@ func (t *TodoItem) IsDone() bool {
 	return t.Done
 }
 
-// HaveDone is deprecated, use IsDone() instead
+// HaveDone keeps old done getter
 func (t *TodoItem) HaveDone() bool {
 	return t.IsDone()
 }
 
-// IsBefore returns true if this todo item comes before the other item chronologically
+// IsBefore reports whether todo comes before another
 func (t *TodoItem) IsBefore(other *TodoItem) bool {
 	return t.TodoTime.Before(other.TodoTime)
 }
 
-// GetKindString returns string representation of the kind
+// GetKindString returns kind label
 func (t *TodoItem) GetKindString() string {
-	if t.Kind == 0 {
+	if t.Kind == TodoKindEvent {
 		return "Event"
 	}
+
 	return "Task"
 }
 
-// GetLevelString returns string representation of the priority level
+// GetLevelString returns priority label
 func (t *TodoItem) GetLevelString() string {
-	switch t.Level {
-	case 0:
-		return "Not Important - Not Urgent"
-	case 1:
-		return "Not Important - Urgent"
-	case 2:
-		return "Important - Not Urgent"
-	case 3:
-		return "Important - Urgent"
-	default:
-		return "Unknown"
-	}
+	return PriorityLevel(t.Level).GetLabel()
 }
 
-// GetLevelColor returns the color for the priority level compatible with Fyne
+// GetLevelColor returns priority color
 func (t *TodoItem) GetLevelColor() color.RGBA {
-	switch t.Level {
-	case 0:
-		return color.RGBA{R: 184, G: 187, B: 38, A: 255} // Gruvbox Green (#b8bb26)
-	case 1:
-		return color.RGBA{R: 131, G: 165, B: 152, A: 255} // Gruvbox Blue (#83a598)
-	case 2:
-		return color.RGBA{R: 254, G: 128, B: 25, A: 255} // Gruvbox Orange (#fe8019)
-	case 3:
-		return color.RGBA{R: 251, G: 73, B: 52, A: 255} // Gruvbox Red (#fb4934)
-	default:
-		return color.RGBA{R: 184, G: 187, B: 38, A: 255} // Default Gruvbox Green
-	}
+	return PriorityLevel(t.Level).GetColor()
 }
 
-// ShouldRemind checks if this item should trigger a reminder
+// ShouldRemind reports whether reminder should fire now
 func (t *TodoItem) ShouldRemind(currentTime time.Time) bool {
-	if t.WarnTime == 0 || t.Done {
+	if t.WarnTime <= 0 || t.Done {
 		return false
 	}
 
 	remindTime := t.TodoTime.Add(-time.Duration(t.WarnTime) * time.Minute)
-	return currentTime.After(remindTime) && currentTime.Before(t.TodoTime)
+
+	return !currentTime.Before(remindTime) && currentTime.Before(t.TodoTime)
 }

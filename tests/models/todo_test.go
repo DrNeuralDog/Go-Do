@@ -288,8 +288,20 @@ func TestTodoItemShouldRemind(t *testing.T) {
 			expected: true,
 		},
 		{
+			name:     "at reminder start",
+			todo:     &models.TodoItem{WarnTime: 60, TodoTime: now.Add(time.Hour)},
+			at:       now,
+			expected: true,
+		},
+		{
 			name:     "before reminder window",
 			todo:     &models.TodoItem{WarnTime: 30, TodoTime: now.Add(time.Hour)},
+			at:       now,
+			expected: false,
+		},
+		{
+			name:     "negative warn time",
+			todo:     &models.TodoItem{WarnTime: -1, TodoTime: now.Add(time.Hour)},
 			at:       now,
 			expected: false,
 		},

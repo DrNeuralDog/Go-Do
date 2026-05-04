@@ -119,11 +119,13 @@ func GetString(key string) string {
 	if str, exists := English[key]; exists {
 		return str
 	}
+
 	return key // Return key as fallback if not found
 }
 
 // GetStringWithArgs retrieves a localized string and formats it with arguments
 func GetStringWithArgs(key string, args ...interface{}) string {
 	format := GetString(key)
+
 	return fmt.Sprintf(format, args...)
 }

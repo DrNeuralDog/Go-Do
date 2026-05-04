@@ -375,9 +375,8 @@ func (mw *MainWindow) loadTodos() {
 		return
 	}
 
-	currentTime := time.Now()
 	dailyTodos := mw.currentDayTodos(monthlyTodos)
-	mw.todos = mw.viewMode.FilterItems(dailyTodos, currentTime)
+	mw.todos = mw.viewMode.FilterItems(dailyTodos)
 
 	models.SortTodosByOrder(mw.todos)
 }

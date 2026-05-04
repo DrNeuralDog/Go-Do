@@ -2,20 +2,19 @@ package models
 
 import (
 	"strings"
-	"time"
 )
 
-// ViewMode represents different filtering modes for the todo list
+// ViewMode filters visible todos
 type ViewMode int
 
 const (
-	ViewAll        ViewMode = 0 // Show all items
-	ViewIncomplete ViewMode = 1 // Show only incomplete items
-	ViewComplete   ViewMode = 2 // Show only completed items
-	ViewStarred    ViewMode = 3 // Show only starred items
+	ViewAll ViewMode = iota
+	ViewIncomplete
+	ViewComplete
+	ViewStarred
 )
 
-// GetLabel returns the English label for each view mode
+// GetLabel returns view mode label
 func (v ViewMode) GetLabel() string {
 	switch v {
 	case ViewAll:
@@ -31,7 +30,7 @@ func (v ViewMode) GetLabel() string {
 	}
 }
 
-// String converts a ViewMode to its persisted string value.
+// String returns persisted view mode value
 func (v ViewMode) String() string {
 	switch v {
 	case ViewAll:
@@ -47,9 +46,9 @@ func (v ViewMode) String() string {
 	}
 }
 
-// ViewModeFromString returns a ViewMode from its string representation.
+// ViewModeFromString parses persisted view mode value
 func ViewModeFromString(s string) ViewMode {
-	switch strings.ToLower(s) {
+	switch strings.TrimSpace(strings.ToLower(s)) {
 	case "all":
 		return ViewAll
 	case "incomplete":
@@ -63,9 +62,9 @@ func ViewModeFromString(s string) ViewMode {
 	}
 }
 
-// FilterItems filters a slice of todo items based on the current view mode
-func (v ViewMode) FilterItems(items []*TodoItem, currentTime time.Time) []*TodoItem {
-	var filtered []*TodoItem
+// FilterItems returns todos visible in this mode
+func (v ViewMode) FilterItems(items []*TodoItem) []*TodoItem {
+	filtered := make([]*TodoItem, 0, len(items))
 
 	for _, item := range items {
 		switch v {
@@ -89,7 +88,7 @@ func (v ViewMode) FilterItems(items []*TodoItem, currentTime time.Time) []*TodoI
 	return filtered
 }
 
-// GetNextMode returns the next view mode in cycle
+// GetNextMode returns next view mode in cycle
 func (v ViewMode) GetNextMode() ViewMode {
 	switch v {
 	case ViewAll:

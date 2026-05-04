@@ -11,57 +11,73 @@ import (
 	"godo/src/ui/threading"
 )
 
-// FlashWindow creates a visual flash effect on a window to indicate it's already open
-// The window will flash 3 times over 600ms total
+const (
+	flashPulseCount    = 3
+	flashPulseDuration = 100 * time.Millisecond
+	flashOverlayAlpha  = 60
+)
+
+// FlashWindow briefly flashes already opened window
 func FlashWindow(win fyne.Window) {
+	threading.RunOnMainThread(func() {
+		flashWindow(win)
+	})
+}
+
+// flashWindow runs flash animation setup on UI thread
+func flashWindow(win fyne.Window) {
 	if win == nil {
 		return
 	}
 
-	// Get the window's current content
 	content := win.Content()
+
 	if content == nil {
 		return
 	}
 
-	// Create a semi-transparent white overlay for the flash effect
 	overlay := canvas.NewRectangle(color.NRGBA{R: 255, G: 255, B: 255, A: 0})
-
-	// Stack the overlay on top of existing content
 	flashContent := container.NewStack(content, overlay)
+
 	win.SetContent(flashContent)
+	win.RequestFocus()
 
-	// Animate the flash: 3 quick pulses
-	flashCount := 3
-	flashDuration := 100 * time.Millisecond
+	for i := 0; i < flashPulseCount; i++ {
+		step := i
 
-	for i := 0; i < flashCount; i++ {
-		i := i // capture for closure
-
-		// Flash on
-		time.AfterFunc(time.Duration(i*2)*flashDuration, func() {
-			threading.RunOnMainThread(func() {
-				overlay.FillColor = color.NRGBA{R: 255, G: 255, B: 255, A: 60}
-				overlay.Refresh()
-			})
+		time.AfterFunc(time.Duration(step*2)*flashPulseDuration, func() {
+			setFlashAlpha(overlay, flashOverlayAlpha)
 		})
 
-		// Flash off
-		time.AfterFunc(time.Duration(i*2+1)*flashDuration, func() {
-			threading.RunOnMainThread(func() {
-				overlay.FillColor = color.NRGBA{R: 255, G: 255, B: 255, A: 0}
-				overlay.Refresh()
-			})
+		time.AfterFunc(time.Duration(step*2+1)*flashPulseDuration, func() {
+			setFlashAlpha(overlay, 0)
 		})
 	}
 
-	// Remove overlay after animation completes
-	time.AfterFunc(time.Duration(flashCount*2)*flashDuration, func() {
-		threading.RunOnMainThread(func() {
-			win.SetContent(content)
-		})
+	time.AfterFunc(time.Duration(flashPulseCount*2)*flashPulseDuration, func() {
+		restoreFlashContent(win, flashContent, content)
 	})
+}
 
-	// Also bring window to front
-	win.RequestFocus()
+// setFlashAlpha updates flash overlay opacity
+func setFlashAlpha(overlay *canvas.Rectangle, alpha uint8) {
+	threading.RunOnMainThread(func() {
+		overlay.FillColor = color.NRGBA{R: 255, G: 255, B: 255, A: alpha}
+
+		overlay.Refresh()
+	})
+}
+
+// restoreFlashContent removes flash overlay
+func restoreFlashContent(win fyne.Window, flashContent, content fyne.CanvasObject) {
+	threading.RunOnMainThread(func() {
+		if win == nil {
+			return
+		}
+
+		// Возвращаем content только если поверх него все еще текущий flash
+		if win.Content() == flashContent {
+			win.SetContent(content)
+		}
+	})
 }

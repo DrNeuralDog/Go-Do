@@ -10,13 +10,13 @@ import (
 	"godo/src/utils"
 )
 
-// MonthlyManager handles monthly organization of todo data
+// MonthlyManager keeps todos split by month
 type MonthlyManager struct {
 	fileManager *FileIOManager
-	cache       map[string][]*models.TodoItem // Cache for loaded monthly data
+	cache       map[string][]*models.TodoItem
 }
 
-// NewMonthlyManager creates a new monthly manager
+// NewMonthlyManager creates monthly todo storage
 func NewMonthlyManager(dataDir string) *MonthlyManager {
 	return &MonthlyManager{
 		fileManager: NewFileIOManager(dataDir),
@@ -24,38 +24,31 @@ func NewMonthlyManager(dataDir string) *MonthlyManager {
 	}
 }
 
-// GetDataDir returns the data directory path
+// GetDataDir returns the data directory
 func (m *MonthlyManager) GetDataDir() string {
 	return m.fileManager.dataDir
 }
 
-// GetTodosForMonth retrieves todos for a specific month, loading from file if necessary
+// GetTodosForMonth returns todos for one month
 func (m *MonthlyManager) GetTodosForMonth(year, month int) ([]*models.TodoItem, error) {
 	dateKey := utils.FormatDateKey(year, month)
 
-	// Check cache first
 	if todos, exists := m.cache[dateKey]; exists {
 		return todos, nil
 	}
 
-	// Load from file
 	todos, err := m.fileManager.LoadTodos(year, month)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load todos for %s: %w", dateKey, err)
 	}
 
-	// Sort todos by time (reverse chronological order like original)
-	sort.Slice(todos, func(i, j int) bool {
-		return todos[i].TodoTime.After(todos[j].TodoTime)
-	})
-
-	// Cache the results
+	sortTodosByTime(todos)
 	m.cache[dateKey] = todos
 
 	return todos, nil
 }
 
-// SaveTodosForMonth saves todos for a specific month
+// SaveTodosForMonth saves todos for one month
 func (m *MonthlyManager) SaveTodosForMonth(year, month int, todos []*models.TodoItem) error {
 	dateKey := utils.FormatDateKey(year, month)
 
@@ -64,61 +57,46 @@ func (m *MonthlyManager) SaveTodosForMonth(year, month int, todos []*models.Todo
 		return fmt.Errorf("failed to save todos for %s: %w", dateKey, err)
 	}
 
-	// Update cache
 	m.cache[dateKey] = todos
 
 	return nil
 }
 
-// AddTodo adds a new todo item to the appropriate month
+// AddTodo adds todo to its month
 func (m *MonthlyManager) AddTodo(todo *models.TodoItem) error {
 	year, month := todo.TodoTime.Year(), int(todo.TodoTime.Month())
 
-	// Get existing todos for the month
 	todos, err := m.GetTodosForMonth(year, month)
 	if err != nil {
 		return err
 	}
 
-	// Add new todo
 	todos = append(todos, todo)
-
-	// Sort and save
-	sort.Slice(todos, func(i, j int) bool {
-		return todos[i].TodoTime.After(todos[j].TodoTime)
-	})
+	sortTodosByTime(todos)
 
 	return m.SaveTodosForMonth(year, month, todos)
 }
 
-// UpdateTodo updates an existing todo item
+// UpdateTodo replaces todo found by its old time
 func (m *MonthlyManager) UpdateTodo(todo *models.TodoItem, originalTime time.Time) error {
 	originalYear, originalMonth := originalTime.Year(), int(originalTime.Month())
 	newYear, newMonth := todo.TodoTime.Year(), int(todo.TodoTime.Month())
 
-	// If the month changed, we need to move the todo
 	if originalYear != newYear || originalMonth != newMonth {
-		// Remove from original month
-		if err := m.RemoveTodo(originalTime); err != nil {
-			return err
-		}
-		// Add to new month
-		return m.AddTodo(todo)
+		return m.moveTodoToMonth(todo, originalTime)
 	}
 
-	// Update within the same month
 	todos, err := m.GetTodosForMonth(originalYear, originalMonth)
 	if err != nil {
 		return err
 	}
 
-	// Find and update the todo
 	found := false
 	for i, existingTodo := range todos {
-		if existingTodo.TodoTime.Equal(originalTime) &&
-			existingTodo.Name == todo.Name {
+		if existingTodo.TodoTime.Equal(originalTime) {
 			todos[i] = todo
 			found = true
+
 			break
 		}
 	}
@@ -127,15 +105,12 @@ func (m *MonthlyManager) UpdateTodo(todo *models.TodoItem, originalTime time.Tim
 		return fmt.Errorf("todo item not found for update")
 	}
 
-	// Sort and save
-	sort.Slice(todos, func(i, j int) bool {
-		return todos[i].TodoTime.After(todos[j].TodoTime)
-	})
+	sortTodosByTime(todos)
 
 	return m.SaveTodosForMonth(originalYear, originalMonth, todos)
 }
 
-// RemoveTodo removes a todo item by its time
+// RemoveTodo removes todo by its time
 func (m *MonthlyManager) RemoveTodo(todoTime time.Time) error {
 	year, month := todoTime.Year(), int(todoTime.Month())
 
@@ -144,29 +119,29 @@ func (m *MonthlyManager) RemoveTodo(todoTime time.Time) error {
 		return err
 	}
 
-	// Find and remove the todo
-	for i, todo := range todos {
-		if todo.TodoTime.Equal(todoTime) {
-			todos = append(todos[:i], todos[i+1:]...)
-			break
-		}
+	todos, found := removeTodoByTime(todos, todoTime)
+	if !found {
+		return fmt.Errorf("todo item not found for removal")
 	}
 
 	return m.SaveTodosForMonth(year, month, todos)
 }
 
-// RemoveTodos removes multiple todos by their times
+// RemoveTodos removes several todos by their times
 func (m *MonthlyManager) RemoveTodos(todoTimes []time.Time) error {
-	// Group by month for efficient processing
-	monthGroups := make(map[string][]time.Time)
+	monthGroups := make(map[string]map[int64]struct{})
 
 	for _, todoTime := range todoTimes {
 		dateKey := utils.FormatDateKey(todoTime.Year(), int(todoTime.Month()))
-		monthGroups[dateKey] = append(monthGroups[dateKey], todoTime)
+
+		if monthGroups[dateKey] == nil {
+			monthGroups[dateKey] = make(map[int64]struct{})
+		}
+
+		monthGroups[dateKey][todoTime.UnixNano()] = struct{}{}
 	}
 
-	// Remove from each month
-	for dateKey, times := range monthGroups {
+	for dateKey, removeTimes := range monthGroups {
 		year, month := utils.ParseDateKey(dateKey)
 
 		todos, err := m.GetTodosForMonth(year, month)
@@ -174,19 +149,20 @@ func (m *MonthlyManager) RemoveTodos(todoTimes []time.Time) error {
 			return err
 		}
 
-		// Remove todos
 		newTodos := make([]*models.TodoItem, 0, len(todos))
+		removed := false
+
 		for _, todo := range todos {
-			shouldRemove := false
-			for _, removeTime := range times {
-				if todo.TodoTime.Equal(removeTime) {
-					shouldRemove = true
-					break
-				}
+			if _, exists := removeTimes[todo.TodoTime.UnixNano()]; exists {
+				removed = true
+				continue
 			}
-			if !shouldRemove {
-				newTodos = append(newTodos, todo)
-			}
+
+			newTodos = append(newTodos, todo)
+		}
+
+		if !removed {
+			continue
 		}
 
 		if err := m.SaveTodosForMonth(year, month, newTodos); err != nil {
@@ -197,7 +173,7 @@ func (m *MonthlyManager) RemoveTodos(todoTimes []time.Time) error {
 	return nil
 }
 
-// GetTodoByTime finds a todo item by its time (for editing)
+// GetTodoByTime finds todo by its time
 func (m *MonthlyManager) GetTodoByTime(todoTime time.Time) (*models.TodoItem, error) {
 	year, month := todoTime.Year(), int(todoTime.Month())
 
@@ -215,23 +191,22 @@ func (m *MonthlyManager) GetTodoByTime(todoTime time.Time) (*models.TodoItem, er
 	return nil, fmt.Errorf("todo item not found")
 }
 
-// GetAllMonths returns all months that have data files
+// GetAllMonths returns months with data files
 func (m *MonthlyManager) GetAllMonths() ([]string, error) {
 	return m.fileManager.GetAllMonthlyFiles()
 }
 
-// ClearCache clears the internal cache
+// ClearCache drops loaded month data
 func (m *MonthlyManager) ClearCache() {
 	m.cache = make(map[string][]*models.TodoItem)
 }
 
-// GetCacheSize returns the number of cached months
+// GetCacheSize returns cached month count
 func (m *MonthlyManager) GetCacheSize() int {
 	return len(m.cache)
 }
 
-// MigrateAllToYAML converts existing legacy TXT monthly files to YAML format.
-// If a YAML file already exists for a month, it will be left untouched.
+// MigrateAllToYAML converts old TXT monthly files to YAML
 func (m *MonthlyManager) MigrateAllToYAML() error {
 	months, err := m.GetAllMonths()
 	if err != nil {
@@ -246,29 +221,65 @@ func (m *MonthlyManager) MigrateAllToYAML() error {
 
 		yamlPath := m.fileManager.getYamlFilePath(year, month)
 		if _, err := os.Stat(yamlPath); err == nil {
-			// Already migrated
 			continue
 		}
 
-		// Try loading from legacy TXT directly
 		todos, err := m.fileManager.loadTodosTxt(year, month)
 		if err != nil {
-			// Skip problematic month but continue others
+			// Битый старый файл не стопает всю миграцию
 			continue
 		}
 
 		if len(todos) == 0 {
-			// Nothing to migrate
 			continue
 		}
 
-		// Save in YAML using current saver
 		if err := m.fileManager.SaveTodos(year, month, todos); err != nil {
 			return fmt.Errorf("failed to migrate %s to YAML: %w", dateKey, err)
 		}
 	}
 
-	// Clear cache to ensure fresh loads from YAML
 	m.ClearCache()
+
 	return nil
+}
+
+// moveTodoToMonth moves todo between monthly files
+func (m *MonthlyManager) moveTodoToMonth(todo *models.TodoItem, originalTime time.Time) error {
+	originalTodo, err := m.GetTodoByTime(originalTime)
+	if err != nil {
+		return err
+	}
+
+	if err := m.RemoveTodo(originalTime); err != nil {
+		return err
+	}
+
+	if err := m.AddTodo(todo); err != nil {
+		if restoreErr := m.AddTodo(originalTodo); restoreErr != nil {
+			return fmt.Errorf("failed to move todo: %w; restore failed: %v", err, restoreErr)
+		}
+
+		return err
+	}
+
+	return nil
+}
+
+// sortTodosByTime keeps newest todos first
+func sortTodosByTime(todos []*models.TodoItem) {
+	sort.Slice(todos, func(i, j int) bool {
+		return todos[i].TodoTime.After(todos[j].TodoTime)
+	})
+}
+
+// removeTodoByTime cuts todo from slice by time
+func removeTodoByTime(todos []*models.TodoItem, todoTime time.Time) ([]*models.TodoItem, bool) {
+	for i, todo := range todos {
+		if todo.TodoTime.Equal(todoTime) {
+			return append(todos[:i], todos[i+1:]...), true
+		}
+	}
+
+	return todos, false
 }

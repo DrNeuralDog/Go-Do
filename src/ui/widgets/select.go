@@ -15,75 +15,75 @@ import (
 	"godo/src/ui/threading"
 )
 
-// CustomSelect is a custom dropdown widget with proper text color and no press/focus highlighting
+const (
+	customSelectWidth        = 180
+	customSelectHeight       = 44
+	customSelectTextSize     = 14
+	customSelectCornerRadius = 8
+	customSelectPressAlpha   = 70
+	customSelectHoverAlpha   = 26
+	customSelectPressDelay   = 120 * time.Millisecond
+)
+
+// CustomSelect draws a dropdown without native focus highlight
 type CustomSelect struct {
 	widget.BaseWidget
 	Options   []string
 	Selected  string
 	OnChanged func(string)
-	TextColor color.Color
-	window    fyne.Window
 	hovered   bool
 	pressed   bool
 }
 
+// NewCustomSelect builds custom dropdown selector
 func NewCustomSelect(options []string, onChanged func(string)) *CustomSelect {
 	cs := &CustomSelect{
 		Options:   options,
 		OnChanged: onChanged,
 	}
 
-	// Set text color based on theme
-	if helpers.IsLightTheme() {
-		// Light theme: use dark text for visibility on white background
-		cs.TextColor = helpers.Hex("#3c3836") // Gruvbox dark gray
-	} else {
-		// Dark theme: use light text
-		cs.TextColor = helpers.Hex("#ebdbb2") // Gruvbox light
-	}
-
 	cs.ExtendBaseWidget(cs)
+
 	return cs
 }
 
-func (cs *CustomSelect) SetSelected(s string) {
-	cs.Selected = s
-	threading.RunOnMainThread(func() {
-		cs.Refresh()
-	})
+// SetSelected updates visible selected option
+func (cs *CustomSelect) SetSelected(value string) {
+	cs.setSelected(value, false)
 }
 
+// MinSize returns fixed select size
 func (cs *CustomSelect) MinSize() fyne.Size {
-	return fyne.NewSize(180, 44)
+	return fyne.NewSize(customSelectWidth, customSelectHeight)
 }
 
+// CreateRenderer builds custom select renderer
 func (cs *CustomSelect) CreateRenderer() fyne.WidgetRenderer {
-	text := canvas.NewText(cs.Selected, helpers.ToNRGBA(cs.TextColor))
+	text := canvas.NewText(cs.Selected, selectTextColor())
 	text.Alignment = fyne.TextAlignLeading
-	text.TextSize = 14
+	text.TextSize = customSelectTextSize
 
 	icon := widget.NewIcon(theme.MenuDropDownIcon())
 
 	base := container.NewBorder(nil, nil, nil, icon, container.NewPadded(text))
 	overlay := canvas.NewRectangle(color.NRGBA{R: 0, G: 0, B: 0, A: 0})
-	overlay.CornerRadius = 8
+	overlay.CornerRadius = customSelectCornerRadius
 	cont := container.NewMax(base, overlay)
 
 	return &customSelectRenderer{
-		select_: cs,
-		text:    text,
-		icon:    icon,
-		cont:    cont,
-		overlay: overlay,
+		selectWidget: cs,
+		text:         text,
+		cont:         cont,
+		overlay:      overlay,
 	}
 }
 
+// customSelectRenderer keeps select visuals in sync
 type customSelectRenderer struct {
-	select_ *CustomSelect
-	text    *canvas.Text
-	icon    *widget.Icon
-	cont    *fyne.Container
-	overlay *canvas.Rectangle
+	selectWidget *CustomSelect
+	text         *canvas.Text
+	cont         *fyne.Container
+	overlay      *canvas.Rectangle
 }
 
 func (r *customSelectRenderer) Layout(size fyne.Size) {
@@ -91,38 +91,14 @@ func (r *customSelectRenderer) Layout(size fyne.Size) {
 }
 
 func (r *customSelectRenderer) MinSize() fyne.Size {
-	return r.select_.MinSize()
+	return r.selectWidget.MinSize()
 }
 
 func (r *customSelectRenderer) Refresh() {
-	r.text.Text = r.select_.Selected
+	r.text.Text = r.selectWidget.Selected
+	r.text.Color = selectTextColor()
+	r.overlay.FillColor = selectOverlayColor(r.selectWidget.hovered, r.selectWidget.pressed)
 
-	// Dynamically set text color based on current theme
-	if helpers.IsLightTheme() {
-		// Light theme: use dark text for visibility on white background
-		r.text.Color = helpers.ToNRGBA(helpers.Hex("#3c3836")) // Dark gray text
-	} else {
-		// Dark theme: use light text
-		r.text.Color = helpers.ToNRGBA(helpers.Hex("#ebdbb2")) // Light text
-	}
-
-	// hover / press overlay (theme-aware)
-	var col color.NRGBA
-	if r.select_.pressed {
-		// subtle dark press for both themes
-		col = color.NRGBA{R: 0, G: 0, B: 0, A: 70}
-	} else if r.select_.hovered {
-		if helpers.IsLightTheme() {
-			// light theme: use dark translucent overlay
-			col = color.NRGBA{R: 0, G: 0, B: 0, A: 26} // ~10% black
-		} else {
-			// dark theme: use light translucent overlay
-			col = color.NRGBA{R: 255, G: 255, B: 255, A: 26} // ~10% white
-		}
-	} else {
-		col = color.NRGBA{R: 0, G: 0, B: 0, A: 0}
-	}
-	r.overlay.FillColor = col
 	threading.RunOnMainThread(func() {
 		r.text.Refresh()
 		r.overlay.Refresh()
@@ -140,63 +116,105 @@ func (r *customSelectRenderer) Objects() []fyne.CanvasObject {
 
 func (r *customSelectRenderer) Destroy() {}
 
+// Tapped opens options popup
 func (cs *CustomSelect) Tapped(_ *fyne.PointEvent) {
-	// brief press flash
 	cs.pressed = true
 	threading.RunOnMainThread(func() {
 		cs.Refresh()
 	})
-	go func(s *CustomSelect) {
-		time.Sleep(120 * time.Millisecond)
+
+	go func(selectWidget *CustomSelect) {
+		time.Sleep(customSelectPressDelay)
 		threading.RunOnMainThread(func() {
-			s.pressed = false
-			s.Refresh()
+			selectWidget.pressed = false
+			selectWidget.Refresh()
 		})
 	}(cs)
-	// Create a popup menu with options
+
 	items := make([]*fyne.MenuItem, len(cs.Options))
-	for i, opt := range cs.Options {
-		option := opt // Capture loop variable
+
+	for i, option := range cs.Options {
+		option := option
+
 		items[i] = fyne.NewMenuItem(option, func() {
-			cs.Selected = option
-			threading.RunOnMainThread(func() {
-				cs.Refresh()
-			})
-			if cs.OnChanged != nil {
-				cs.OnChanged(option)
-			}
+			cs.setSelected(option, true)
 		})
 	}
 
-	// Show popup menu at widget position with width matching control width
-	m := fyne.NewMenu("", items...)
-	cnv := fyne.CurrentApp().Driver().CanvasForObject(cs)
-	pos := fyne.CurrentApp().Driver().AbsolutePositionForObject(cs)
-	popup := widget.NewPopUpMenu(m, cnv)
-	popup.ShowAtPosition(pos)
-	// enforce popup width = control width
+	menu := fyne.NewMenu("", items...)
+	canvas := fyne.CurrentApp().Driver().CanvasForObject(cs)
+	position := fyne.CurrentApp().Driver().AbsolutePositionForObject(cs)
+	popup := widget.NewPopUpMenu(menu, canvas)
+	popup.ShowAtPosition(position)
+
+	// Ширину держим как у самого селекта
 	ctrlWidth := cs.Size().Width
 	min := popup.MinSize()
 	popup.Resize(fyne.NewSize(ctrlWidth, min.Height))
 }
 
-// FocusGained is overridden to do nothing (no focus highlight)
-func (cs *CustomSelect) FocusGained() {
-	// Don't show focus highlight
+// setSelected updates value and optionally fires callback
+func (cs *CustomSelect) setSelected(value string, notify bool) {
+	if cs.Selected == value {
+		return
+	}
+
+	cs.Selected = value
+
+	threading.RunOnMainThread(func() {
+		cs.Refresh()
+	})
+
+	if notify && cs.OnChanged != nil {
+		cs.OnChanged(value)
+	}
 }
 
-// FocusLost is overridden to do nothing
-func (cs *CustomSelect) FocusLost() {
-	// Don't show focus highlight
+// selectTextColor returns theme-aware select text color
+func selectTextColor() color.NRGBA {
+	if helpers.IsLightTheme() {
+		return helpers.ToNRGBA(helpers.Hex("#3c3836"))
+	}
+
+	return helpers.ToNRGBA(helpers.Hex("#ebdbb2"))
 }
 
-// Hover handling (desktop only)
+// selectOverlayColor returns hover or press overlay color
+func selectOverlayColor(hovered, pressed bool) color.NRGBA {
+	if pressed {
+		return color.NRGBA{R: 0, G: 0, B: 0, A: customSelectPressAlpha}
+	}
+
+	if !hovered {
+		return color.NRGBA{R: 0, G: 0, B: 0, A: 0}
+	}
+
+	if helpers.IsLightTheme() {
+		return color.NRGBA{R: 0, G: 0, B: 0, A: customSelectHoverAlpha}
+	}
+
+	return color.NRGBA{R: 255, G: 255, B: 255, A: customSelectHoverAlpha}
+}
+
+// FocusGained keeps native focus highlight disabled
+func (cs *CustomSelect) FocusGained() {}
+
+// FocusLost keeps native focus highlight disabled
+func (cs *CustomSelect) FocusLost() {}
+
+// MouseIn marks select as hovered
 func (cs *CustomSelect) MouseIn(*desktop.MouseEvent) {
 	cs.hovered = true
+
 	threading.RunOnMainThread(func() { cs.Refresh() })
 }
+
+// MouseMoved satisfies desktop hover interface
 func (cs *CustomSelect) MouseMoved(*desktop.MouseEvent) {}
+
+// MouseOut clears hover state
 func (cs *CustomSelect) MouseOut() {
 	cs.hovered = false
+
 	threading.RunOnMainThread(func() { cs.Refresh() })
 }

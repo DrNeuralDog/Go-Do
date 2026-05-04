@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -15,53 +16,64 @@ import (
 	"godo/src/utils"
 )
 
-// FileIOManager handles file operations for todo data persistence
+const (
+	monthlyYAMLVersion = 1
+	dataDirPermission  = 0755
+	filePermission     = 0644
+	yamlFileExt        = ".yaml"
+	txtFileExt         = ".txt"
+	tempFileExt        = ".tmp"
+	backupFileExt      = ".bak"
+)
+
+// FileIOManager handles todo files
 type FileIOManager struct {
 	dataDir string
 }
 
-// NewFileIOManager creates a new file I/O manager
+type monthlyYAML struct {
+	Version int                `yaml:"version"`
+	Todos   []*models.TodoItem `yaml:"todos"`
+}
+
+// NewFileIOManager creates file storage
 func NewFileIOManager(dataDir string) *FileIOManager {
 	return &FileIOManager{
 		dataDir: dataDir,
 	}
 }
 
-// EnsureDataDirectory creates the data directory if it doesn't exist
+// EnsureDataDirectory creates data directory
 func (f *FileIOManager) EnsureDataDirectory() error {
-	return os.MkdirAll(f.dataDir, 0755)
+	return os.MkdirAll(f.dataDir, dataDirPermission)
 }
 
-// getYamlFilePath returns YAML file path for a specific year/month
+// getYamlFilePath returns YAML path for a month
 func (f *FileIOManager) getYamlFilePath(year, month int) string {
 	dateKey := utils.FormatDateKey(year, month)
-	return filepath.Join(f.dataDir, dateKey+".yaml")
+
+	return filepath.Join(f.dataDir, dateKey+yamlFileExt)
 }
 
-// getTxtFilePath returns legacy TXT file path for a specific year/month
+// getTxtFilePath returns old TXT path for a month
 func (f *FileIOManager) getTxtFilePath(year, month int) string {
 	dateKey := utils.FormatDateKey(year, month)
-	return filepath.Join(f.dataDir, dateKey+".txt")
+
+	return filepath.Join(f.dataDir, dateKey+txtFileExt)
 }
 
-// GetFilePath returns the preferred file path (YAML) for a specific year/month
+// GetFilePath returns YAML path for a month
 func (f *FileIOManager) GetFilePath(year, month int) string {
 	return f.getYamlFilePath(year, month)
 }
 
-// SaveTodos saves todo items to a monthly file
+// SaveTodos saves todos to monthly YAML
 func (f *FileIOManager) SaveTodos(year, month int, todos []*models.TodoItem) error {
 	if err := f.EnsureDataDirectory(); err != nil {
 		return fmt.Errorf("failed to create data directory: %w", err)
 	}
 
-	// YAML format with a simple wrapper for future extensions
-	type monthlyYAML struct {
-		Version int                `yaml:"version"`
-		Todos   []*models.TodoItem `yaml:"todos"`
-	}
-
-	content := monthlyYAML{Version: 1, Todos: todos}
+	content := monthlyYAML{Version: monthlyYAMLVersion, Todos: todos}
 
 	data, err := yaml.Marshal(&content)
 	if err != nil {
@@ -69,203 +81,107 @@ func (f *FileIOManager) SaveTodos(year, month int, todos []*models.TodoItem) err
 	}
 
 	filePath := f.getYamlFilePath(year, month)
-	tempPath := filePath + ".tmp"
 
-	// Write atomically
-	if err := os.WriteFile(tempPath, data, 0644); err != nil {
-		return fmt.Errorf("failed to write temp YAML: %w", err)
-	}
-
-	if _, err := os.Stat(filePath); err == nil {
-		if err := os.Remove(filePath); err != nil {
-			return fmt.Errorf("failed to remove existing YAML: %w", err)
-		}
-	}
-
-	if err := os.Rename(tempPath, filePath); err != nil {
-		return fmt.Errorf("failed to rename temp YAML: %w", err)
-	}
-
-	return nil
+	return writeFileAtomic(filePath, data)
 }
 
-// writeTodoItem writes a single todo item to the file
-func (f *FileIOManager) writeTodoItem(writer *bufio.Writer, todo *models.TodoItem) error {
-	// Write name (with line count prefix)
-	if err := f.writeMultiLineString(writer, todo.Name); err != nil {
-		return err
-	}
-
-	// Write label (with line count prefix)
-	if err := f.writeMultiLineString(writer, todo.Label); err != nil {
-		return err
-	}
-
-	// Write level
-	_, err := writer.WriteString(fmt.Sprintf("%d\n", todo.Level))
-	if err != nil {
-		return err
-	}
-
-	// Write date/time components
-	date := todo.TodoTime
-	_, err = writer.WriteString(fmt.Sprintf("%d %d %d %d %d\n",
-		date.Year(), int(date.Month()), date.Day(), date.Hour(), date.Minute()))
-	if err != nil {
-		return err
-	}
-
-	// Write place (with line count prefix)
-	if err := f.writeMultiLineString(writer, todo.Place); err != nil {
-		return err
-	}
-
-	// Write content (with line count prefix)
-	if err := f.writeMultiLineString(writer, todo.Content); err != nil {
-		return err
-	}
-
-	// Write done status, kind, and warn time
-	_, err = writer.WriteString(fmt.Sprintf("%t %d %d\n", todo.Done, todo.Kind, todo.WarnTime))
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// writeMultiLineString writes a string that may contain newlines
-func (f *FileIOManager) writeMultiLineString(writer *bufio.Writer, s string) error {
-	// Count lines
-	lineCount := 1
-	for _, char := range s {
-		if char == '\n' {
-			lineCount++
-		}
-	}
-
-	// Write line count
-	_, err := writer.WriteString(fmt.Sprintf("%d\n", lineCount))
-	if err != nil {
-		return err
-	}
-
-	// Write the string
-	_, err = writer.WriteString(s + "\n")
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// LoadTodos loads todo items from a monthly file
+// LoadTodos loads todos from YAML or old TXT
 func (f *FileIOManager) LoadTodos(year, month int) ([]*models.TodoItem, error) {
-	// Prefer YAML
 	yamlPath := f.getYamlFilePath(year, month)
-	if file, err := os.ReadFile(yamlPath); err == nil {
-		// Try wrapper format first
-		type monthlyYAML struct {
-			Version int                `yaml:"version"`
-			Todos   []*models.TodoItem `yaml:"todos"`
+	file, err := os.ReadFile(yamlPath)
+
+	if err == nil {
+		todos, err := readTodosYAML(file)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse YAML %s: %w", yamlPath, err)
 		}
-		var wrapper monthlyYAML
-		if err := yaml.Unmarshal(file, &wrapper); err == nil && wrapper.Todos != nil {
-			// Ensure deterministic order: newest first
-			return wrapper.Todos, nil
-		}
-		// Fallback: direct list
-		var list []*models.TodoItem
-		if err := yaml.Unmarshal(file, &list); err == nil {
-			return list, nil
-		}
-		return []*models.TodoItem{}, nil
-	} else if !os.IsNotExist(err) {
+
+		return todos, nil
+	}
+
+	if !os.IsNotExist(err) {
 		return nil, fmt.Errorf("failed to read YAML: %w", err)
 	}
 
-	// Fallback to legacy TXT
 	return f.loadTodosTxt(year, month)
 }
 
-// loadTodosTxt loads legacy TXT format and is robust to trailing blank lines
+// loadTodosTxt reads old TXT month data
 func (f *FileIOManager) loadTodosTxt(year, month int) ([]*models.TodoItem, error) {
 	filePath := f.getTxtFilePath(year, month)
 	file, err := os.Open(filePath)
+
 	if err != nil {
 		if os.IsNotExist(err) {
 			return []*models.TodoItem{}, nil
 		}
+
 		return nil, fmt.Errorf("failed to open legacy TXT file: %w", err)
 	}
+
 	defer file.Close()
 
 	scanner := bufio.NewScanner(file)
 
-	// Read first line: count
 	if !scanner.Scan() {
 		return []*models.TodoItem{}, nil
 	}
+
 	countStr := strings.TrimSpace(scanner.Text())
 	count, err := strconv.Atoi(countStr)
 	if err != nil {
-		// corrupted file, ignore
+		// Старый файл битый, считаем его пустым
 		return []*models.TodoItem{}, nil
 	}
 
 	todos := make([]*models.TodoItem, 0, count)
 	for i := 0; i < count; i++ {
-		todo, _, err := f.readTodoItem(scanner)
+		todo, err := f.readTodoItem(scanner)
 		if err != nil {
-			// stop on parse error and return what we have so far
+			// Дальше уже не угадаешь, оставляем что прочитали
 			break
 		}
+
 		todos = append(todos, todo)
 	}
 
 	return todos, nil
 }
 
-// readTodoItem reads a single todo item from the scanner
-func (f *FileIOManager) readTodoItem(scanner *bufio.Scanner) (*models.TodoItem, int, error) {
+// readTodoItem reads one old TXT todo
+func (f *FileIOManager) readTodoItem(scanner *bufio.Scanner) (*models.TodoItem, error) {
 	todo := models.NewTodoItem()
-	linesRead := 0
 
-	// Read name
-	name, lines, err := f.readMultiLineString(scanner)
+	name, err := f.readMultiLineString(scanner)
 	if err != nil {
-		return nil, 0, fmt.Errorf("failed to read name: %w", err)
+		return nil, fmt.Errorf("failed to read name: %w", err)
 	}
 	todo.Name = name
-	linesRead += lines
 
-	// Read label
-	label, lines, err := f.readMultiLineString(scanner)
+	label, err := f.readMultiLineString(scanner)
 	if err != nil {
-		return nil, 0, fmt.Errorf("failed to read label: %w", err)
+		return nil, fmt.Errorf("failed to read label: %w", err)
 	}
 	todo.Label = label
-	linesRead += lines
 
-	// Read level
 	if !scanner.Scan() {
-		return nil, 0, fmt.Errorf("unexpected end of file reading level")
+		return nil, fmt.Errorf("unexpected end of file reading level")
 	}
+
 	level, err := strconv.Atoi(scanner.Text())
 	if err != nil {
-		return nil, 0, fmt.Errorf("invalid level: %w", err)
+		return nil, fmt.Errorf("invalid level: %w", err)
 	}
 	todo.Level = level
-	linesRead++
 
-	// Read date/time
 	if !scanner.Scan() {
-		return nil, 0, fmt.Errorf("unexpected end of file reading date/time")
+		return nil, fmt.Errorf("unexpected end of file reading date/time")
 	}
+
 	dateStr := scanner.Text()
 	parts := strings.Fields(dateStr)
 	if len(parts) != 5 {
-		return nil, 0, fmt.Errorf("invalid date format: %s", dateStr)
+		return nil, fmt.Errorf("invalid date format: %s", dateStr)
 	}
 
 	year, err1 := strconv.Atoi(parts[0])
@@ -275,36 +191,31 @@ func (f *FileIOManager) readTodoItem(scanner *bufio.Scanner) (*models.TodoItem, 
 	minute, err5 := strconv.Atoi(parts[4])
 
 	if err1 != nil || err2 != nil || err3 != nil || err4 != nil || err5 != nil {
-		return nil, 0, fmt.Errorf("invalid date components in: %s", dateStr)
+		return nil, fmt.Errorf("invalid date components in: %s", dateStr)
 	}
 
 	todo.TodoTime = time.Date(year, time.Month(month), day, hour, minute, 0, 0, time.UTC)
-	linesRead++
 
-	// Read place
-	place, lines, err := f.readMultiLineString(scanner)
+	place, err := f.readMultiLineString(scanner)
 	if err != nil {
-		return nil, 0, fmt.Errorf("failed to read place: %w", err)
+		return nil, fmt.Errorf("failed to read place: %w", err)
 	}
 	todo.Place = place
-	linesRead += lines
 
-	// Read content
-	content, lines, err := f.readMultiLineString(scanner)
+	content, err := f.readMultiLineString(scanner)
 	if err != nil {
-		return nil, 0, fmt.Errorf("failed to read content: %w", err)
+		return nil, fmt.Errorf("failed to read content: %w", err)
 	}
 	todo.Content = content
-	linesRead += lines
 
-	// Read done status, kind, and warn time
 	if !scanner.Scan() {
-		return nil, 0, fmt.Errorf("unexpected end of file reading status")
+		return nil, fmt.Errorf("unexpected end of file reading status")
 	}
+
 	statusStr := scanner.Text()
 	parts = strings.Fields(statusStr)
 	if len(parts) != 3 {
-		return nil, 0, fmt.Errorf("invalid status format: %s", statusStr)
+		return nil, fmt.Errorf("invalid status format: %s", statusStr)
 	}
 
 	done, err1 := strconv.ParseBool(parts[0])
@@ -312,118 +223,243 @@ func (f *FileIOManager) readTodoItem(scanner *bufio.Scanner) (*models.TodoItem, 
 	warnTime, err3 := strconv.Atoi(parts[2])
 
 	if err1 != nil || err2 != nil || err3 != nil {
-		return nil, 0, fmt.Errorf("invalid status components in: %s", statusStr)
+		return nil, fmt.Errorf("invalid status components in: %s", statusStr)
 	}
 
 	todo.Done = done
 	todo.Kind = kind
 	todo.WarnTime = warnTime
-	linesRead++
 
-	return todo, linesRead, nil
+	return todo, nil
 }
 
-// readMultiLineString reads a multi-line string from the scanner
-func (f *FileIOManager) readMultiLineString(scanner *bufio.Scanner) (string, int, error) {
+// readMultiLineString reads old counted string
+func (f *FileIOManager) readMultiLineString(scanner *bufio.Scanner) (string, error) {
 	if !scanner.Scan() {
-		return "", 0, fmt.Errorf("unexpected end of file reading line count")
+		return "", fmt.Errorf("unexpected end of file reading line count")
 	}
 
 	lineCount, err := strconv.Atoi(scanner.Text())
 	if err != nil {
-		return "", 0, fmt.Errorf("invalid line count: %w", err)
+		return "", fmt.Errorf("invalid line count: %w", err)
+	}
+
+	if lineCount < 0 {
+		return "", fmt.Errorf("invalid line count: %d", lineCount)
 	}
 
 	var result strings.Builder
-	linesRead := 1
 
-	for i := 0; i < lineCount && scanner.Scan(); i++ {
-		line := scanner.Text()
-
-		// Handle Windows/Unix line endings
-		if i < lineCount-1 {
-			// Not the last line, add back the newline
-			result.WriteString(line)
-			result.WriteString("\n")
-		} else {
-			// Last line, don't add trailing newline
-			result.WriteString(line)
+	for i := 0; i < lineCount; i++ {
+		if !scanner.Scan() {
+			return "", fmt.Errorf("unexpected end of file reading string")
 		}
-		linesRead++
+
+		if i > 0 {
+			result.WriteString("\n")
+		}
+
+		result.WriteString(scanner.Text())
 	}
 
-	return result.String(), linesRead, nil
+	return result.String(), nil
 }
 
-// DeleteFile removes a monthly data file
+// DeleteFile removes monthly data files
 func (f *FileIOManager) DeleteFile(year, month int) error {
-	// Try deleting both formats
-	yamlErr := os.Remove(f.getYamlFilePath(year, month))
-	txtErr := os.Remove(f.getTxtFilePath(year, month))
-	if yamlErr == nil || txtErr == nil {
+	yamlPath := f.getYamlFilePath(year, month)
+	paths := []string{
+		yamlPath,
+		yamlPath + tempFileExt,
+		yamlPath + backupFileExt,
+		f.getTxtFilePath(year, month),
+	}
+
+	removed := false
+	var firstErr error
+
+	for _, path := range paths {
+		err := os.Remove(path)
+		if err == nil {
+			removed = true
+			continue
+		}
+
+		if !os.IsNotExist(err) && firstErr == nil {
+			firstErr = err
+		}
+	}
+
+	if removed {
 		return nil
 	}
-	// if both failed, return yamlErr (could be not-exist)
-	return yamlErr
+
+	if firstErr != nil {
+		return firstErr
+	}
+
+	return &os.PathError{Op: "remove", Path: yamlPath, Err: os.ErrNotExist}
 }
 
-// FileExists checks if a monthly data file exists
+// FileExists checks monthly data file
 func (f *FileIOManager) FileExists(year, month int) bool {
 	if _, err := os.Stat(f.getYamlFilePath(year, month)); err == nil {
 		return true
 	}
+
 	if _, err := os.Stat(f.getTxtFilePath(year, month)); err == nil {
 		return true
 	}
+
 	return false
 }
 
-// GetAllMonthlyFiles returns a list of all monthly data files
+// GetAllMonthlyFiles returns sorted month keys
 func (f *FileIOManager) GetAllMonthlyFiles() ([]string, error) {
 	files, err := os.ReadDir(f.dataDir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return []string{}, nil
 		}
+
 		return nil, fmt.Errorf("failed to read data directory: %w", err)
 	}
 
 	months := make(map[string]struct{})
-	// Prefer YAML when both exist
 	for _, file := range files {
 		if file.IsDir() {
 			continue
 		}
-		name := file.Name()
-		if strings.HasSuffix(name, ".yaml") {
-			base := strings.TrimSuffix(name, ".yaml")
-			if len(base) == 6 {
-				if _, err := strconv.Atoi(base); err == nil {
-					months[base] = struct{}{}
-				}
-			}
-		}
-	}
-	for _, file := range files {
-		if file.IsDir() {
+
+		dateKey, ok := monthlyFileDateKey(file.Name())
+		if !ok {
 			continue
 		}
-		name := file.Name()
-		if strings.HasSuffix(name, ".txt") {
-			base := strings.TrimSuffix(name, ".txt")
-			if len(base) == 6 {
-				if _, err := strconv.Atoi(base); err == nil {
-					if _, exists := months[base]; !exists {
-						months[base] = struct{}{}
-					}
-				}
-			}
-		}
+
+		months[dateKey] = struct{}{}
 	}
 
-	var monthlyFiles []string
-	for k := range months {
-		monthlyFiles = append(monthlyFiles, k)
+	monthlyFiles := make([]string, 0, len(months))
+
+	for dateKey := range months {
+		monthlyFiles = append(monthlyFiles, dateKey)
 	}
+
+	sort.Strings(monthlyFiles)
+
 	return monthlyFiles, nil
+}
+
+// readTodosYAML reads current and old YAML shapes
+func readTodosYAML(data []byte) ([]*models.TodoItem, error) {
+	if strings.TrimSpace(string(data)) == "" {
+		return []*models.TodoItem{}, nil
+	}
+
+	var wrapper monthlyYAML
+	wrapperErr := yaml.Unmarshal(data, &wrapper)
+	if wrapperErr == nil && wrapper.Todos != nil {
+		return wrapper.Todos, nil
+	}
+
+	var list []*models.TodoItem
+	listErr := yaml.Unmarshal(data, &list)
+
+	if listErr == nil {
+		if list == nil {
+			return []*models.TodoItem{}, nil
+		}
+
+		return list, nil
+	}
+
+	return nil, fmt.Errorf("wrapper=%v list=%v", wrapperErr, listErr)
+}
+
+// writeFileAtomic replaces file and restores old one on failure
+func writeFileAtomic(filePath string, data []byte) error {
+	tempPath := filePath + tempFileExt
+	backupPath := filePath + backupFileExt
+
+	if err := os.WriteFile(tempPath, data, filePermission); err != nil {
+		return fmt.Errorf("failed to write temp file: %w", err)
+	}
+
+	tempExists := true
+	defer func() {
+		if tempExists {
+			_ = os.Remove(tempPath)
+		}
+	}()
+
+	if err := removeFileIfExists(backupPath); err != nil {
+		return fmt.Errorf("failed to remove old backup file: %w", err)
+	}
+
+	hasOldFile, err := backupExistingFile(filePath, backupPath)
+
+	if err != nil {
+		return err
+	}
+
+	if err := os.Rename(tempPath, filePath); err != nil {
+		if hasOldFile {
+			if restoreErr := os.Rename(backupPath, filePath); restoreErr != nil {
+				return fmt.Errorf("failed to replace file: %w; restore failed: %v", err, restoreErr)
+			}
+		}
+
+		return fmt.Errorf("failed to replace file: %w", err)
+	}
+
+	tempExists = false
+	if hasOldFile {
+		_ = os.Remove(backupPath)
+	}
+
+	return nil
+}
+
+// backupExistingFile moves current file aside
+func backupExistingFile(filePath, backupPath string) (bool, error) {
+	if _, err := os.Stat(filePath); err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+
+		return false, fmt.Errorf("failed to stat existing file: %w", err)
+	}
+
+	if err := os.Rename(filePath, backupPath); err != nil {
+		return false, fmt.Errorf("failed to backup existing file: %w", err)
+	}
+
+	return true, nil
+}
+
+// removeFileIfExists removes file when it is present
+func removeFileIfExists(filePath string) error {
+	if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+
+	return nil
+}
+
+// monthlyFileDateKey extracts YYYYMM from monthly file name
+func monthlyFileDateKey(name string) (string, bool) {
+	var dateKey string
+
+	switch {
+	case strings.HasSuffix(name, yamlFileExt):
+		dateKey = strings.TrimSuffix(name, yamlFileExt)
+	case strings.HasSuffix(name, txtFileExt):
+		dateKey = strings.TrimSuffix(name, txtFileExt)
+	default:
+		return "", false
+	}
+
+	year, month := utils.ParseDateKey(dateKey)
+
+	return dateKey, year != 0 && month != 0
 }

@@ -2,62 +2,112 @@ package helpers
 
 import "image/color"
 
-// ToNRGBA converts any color.Color to color.NRGBA for manipulation.
+const (
+	hexColorLength = 7
+	hexMaxAlpha    = 255
+)
+
+// ToNRGBA converts color.Color to color.NRGBA
 func ToNRGBA(c color.Color) color.NRGBA {
-	r, g, b, a := c.RGBA()
-	return color.NRGBA{R: uint8(r >> 8), G: uint8(g >> 8), B: uint8(b >> 8), A: uint8(a >> 8)}
+	if c == nil {
+		return color.NRGBA{}
+	}
+
+	return color.NRGBAModel.Convert(c).(color.NRGBA)
 }
 
-// Darken returns a darker version of the color by the provided factor (0..1).
+// Darken returns darker color by factor
 func Darken(c color.NRGBA, factor float32) color.NRGBA {
-	if factor < 0 {
-		factor = 0
-	}
-	if factor > 1 {
-		factor = 1
-	}
+	factor = clampColorFactor(factor)
+
 	return color.NRGBA{
 		R: uint8(float32(c.R) * factor),
 		G: uint8(float32(c.G) * factor),
 		B: uint8(float32(c.B) * factor),
+
 		A: c.A,
 	}
 }
 
-// Lighten returns a lighter version of the color by mixing with white (0..1).
+// Lighten returns color mixed with white
 func Lighten(c color.NRGBA, amount float32) color.NRGBA {
-	if amount < 0 {
-		amount = 0
+	amount = clampColorFactor(amount)
+
+	return color.NRGBA{
+		R: mixColorByte(c.R, amount),
+		G: mixColorByte(c.G, amount),
+		B: mixColorByte(c.B, amount),
+
+		A: c.A,
 	}
-	if amount > 1 {
-		amount = 1
-	}
-	mix := func(v uint8) uint8 {
-		return uint8(float32(v)*(1-amount) + 255*amount)
-	}
-	return color.NRGBA{R: mix(c.R), G: mix(c.G), B: mix(c.B), A: c.A}
 }
 
-// Hex parses a #RRGGBB hex color string into color.NRGBA.
+// Hex parses #RRGGBB into color.NRGBA
 func Hex(h string) color.NRGBA {
-	var r, g, b uint8
-	if len(h) == 7 && h[0] == '#' {
-		r = fromHex(h[1])<<4 | fromHex(h[2])
-		g = fromHex(h[3])<<4 | fromHex(h[4])
-		b = fromHex(h[5])<<4 | fromHex(h[6])
+	if len(h) != hexColorLength || h[0] != '#' {
+		return color.NRGBA{}
 	}
-	return color.NRGBA{R: r, G: g, B: b, A: 255}
+
+	r, ok := hexColorByte(h[1], h[2])
+	if !ok {
+		return color.NRGBA{}
+	}
+
+	g, ok := hexColorByte(h[3], h[4])
+	if !ok {
+		return color.NRGBA{}
+	}
+
+	b, ok := hexColorByte(h[5], h[6])
+	if !ok {
+		return color.NRGBA{}
+	}
+
+	return color.NRGBA{R: r, G: g, B: b, A: hexMaxAlpha}
 }
 
-func fromHex(c byte) uint8 {
-	if c >= '0' && c <= '9' {
-		return uint8(c - '0')
+// clampColorFactor keeps color factor inside 0..1
+func clampColorFactor(value float32) float32 {
+	if value < 0 {
+		return 0
 	}
-	if c >= 'a' && c <= 'f' {
-		return uint8(10 + c - 'a')
+
+	if value > 1 {
+		return 1
 	}
-	if c >= 'A' && c <= 'F' {
-		return uint8(10 + c - 'A')
+
+	return value
+}
+
+// mixColorByte mixes one channel with white
+func mixColorByte(value uint8, amount float32) uint8 {
+	return uint8(float32(value)*(1-amount) + hexMaxAlpha*amount)
+}
+
+func hexColorByte(hi, lo byte) (uint8, bool) {
+	hiValue, ok := hexNibble(hi)
+	if !ok {
+		return 0, false
 	}
-	return 0
+
+	loValue, ok := hexNibble(lo)
+	if !ok {
+		return 0, false
+	}
+
+	return hiValue<<4 | loValue, true
+}
+
+// hexNibble parses one hex symbol
+func hexNibble(c byte) (uint8, bool) {
+	switch {
+	case c >= '0' && c <= '9':
+		return uint8(c - '0'), true
+	case c >= 'a' && c <= 'f':
+		return uint8(10 + c - 'a'), true
+	case c >= 'A' && c <= 'F':
+		return uint8(10 + c - 'A'), true
+	default:
+		return 0, false
+	}
 }

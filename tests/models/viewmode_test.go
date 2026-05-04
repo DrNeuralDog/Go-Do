@@ -121,7 +121,7 @@ func TestViewModeFiltering(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			filtered := test.mode.FilterItems(todos, now)
+			filtered := test.mode.FilterItems(todos)
 
 			assertTodoNames(t, filtered, test.expected)
 		})

@@ -10,7 +10,9 @@ import (
 	"godo/src/ui/helpers"
 )
 
-// GradientRect is a custom widget that draws a vertical linear gradient.
+const gradientBandCount = 10
+
+// GradientRect draws a vertical linear gradient
 type GradientRect struct {
 	widget.BaseWidget
 	StartColor color.Color
@@ -18,77 +20,104 @@ type GradientRect struct {
 	Radius     float32
 }
 
+// NewGradientRect builds vertical gradient rectangle
 func NewGradientRect(start, end color.Color, radius float32) *GradientRect {
-	gr := &GradientRect{
+	gradient := &GradientRect{
 		StartColor: start,
 		EndColor:   end,
 		Radius:     radius,
 	}
-	gr.ExtendBaseWidget(gr)
-	return gr
+
+	gradient.ExtendBaseWidget(gradient)
+
+	return gradient
 }
 
-func (gr *GradientRect) CreateRenderer() fyne.WidgetRenderer {
-	return &gradientRenderer{gradient: gr}
+func (gradient *GradientRect) CreateRenderer() fyne.WidgetRenderer {
+	return newGradientRenderer(gradient)
 }
 
+// gradientRenderer keeps gradient bands stable for Fyne renderer
 type gradientRenderer struct {
 	gradient *GradientRect
 	rects    []*canvas.Rectangle
+	objects  []fyne.CanvasObject
 }
 
-func (r *gradientRenderer) Layout(size fyne.Size) {
-	// Create gradient bands - 10 bands for smooth transition
-	bandCount := 10
-	bandHeight := size.Height / float32(bandCount)
+// newGradientRenderer creates gradient bands once
+func newGradientRenderer(gradient *GradientRect) *gradientRenderer {
+	renderer := &gradientRenderer{
+		gradient: gradient,
+		rects:    make([]*canvas.Rectangle, gradientBandCount),
+		objects:  make([]fyne.CanvasObject, gradientBandCount),
+	}
 
-	// Clear old rects if resizing
-	r.rects = make([]*canvas.Rectangle, 0, bandCount)
+	for i := 0; i < gradientBandCount; i++ {
+		rect := canvas.NewRectangle(renderer.bandColor(i))
+		rect.CornerRadius = gradient.Radius
 
-	start := helpers.ToNRGBA(r.gradient.StartColor)
-	end := helpers.ToNRGBA(r.gradient.EndColor)
+		renderer.rects[i] = rect
+		renderer.objects[i] = rect
+	}
 
-	for i := 0; i < bandCount; i++ {
-		// Interpolate color
-		t := float32(i) / float32(bandCount-1)
-		bandColor := color.NRGBA{
-			R: uint8(float32(start.R)*(1-t) + float32(end.R)*t),
-			G: uint8(float32(start.G)*(1-t) + float32(end.G)*t),
-			B: uint8(float32(start.B)*(1-t) + float32(end.B)*t),
-			A: 255,
-		}
+	return renderer
+}
 
-		rect := canvas.NewRectangle(bandColor)
-		rect.CornerRadius = r.gradient.Radius
-		rect.Resize(fyne.NewSize(size.Width, bandHeight+1)) // +1 to avoid gaps
+// Layout positions gradient bands
+func (renderer *gradientRenderer) Layout(size fyne.Size) {
+	bandHeight := size.Height / gradientBandCount
+
+	for i, rect := range renderer.rects {
+		rect.CornerRadius = renderer.gradient.Radius
+		rect.Resize(fyne.NewSize(size.Width, bandHeight+1))
 		rect.Move(fyne.NewPos(0, float32(i)*bandHeight))
-		r.rects = append(r.rects, rect)
 	}
 }
 
-func (r *gradientRenderer) MinSize() fyne.Size {
-	// Return zero size to allow gradient to be any size (no minimum constraint)
+// MinSize allows gradient to fill any parent size
+func (renderer *gradientRenderer) MinSize() fyne.Size {
 	return fyne.NewSize(0, 0)
 }
 
-func (r *gradientRenderer) Refresh() {
-	// Trigger re-layout with current size
-	if size := r.gradient.Size(); size.Width > 0 && size.Height > 0 {
-		r.Layout(size)
+// Refresh updates gradient colors
+func (renderer *gradientRenderer) Refresh() {
+	renderer.Layout(renderer.gradient.Size())
+
+	for i, rect := range renderer.rects {
+		rect.FillColor = renderer.bandColor(i)
+		rect.CornerRadius = renderer.gradient.Radius
+
+		rect.Refresh()
 	}
 }
 
-func (r *gradientRenderer) BackgroundColor() fyne.ThemeColorName {
-	// Return empty/transparent - gradient fills everything
+func (renderer *gradientRenderer) BackgroundColor() fyne.ThemeColorName {
 	return ""
 }
 
-func (r *gradientRenderer) Objects() []fyne.CanvasObject {
-	objs := make([]fyne.CanvasObject, len(r.rects))
-	for i, rect := range r.rects {
-		objs[i] = rect
-	}
-	return objs
+// Objects returns gradient band objects
+func (renderer *gradientRenderer) Objects() []fyne.CanvasObject {
+	return renderer.objects
 }
 
-func (r *gradientRenderer) Destroy() {}
+// Destroy releases renderer resources
+func (renderer *gradientRenderer) Destroy() {}
+
+// bandColor returns interpolated color for band index
+func (renderer *gradientRenderer) bandColor(index int) color.NRGBA {
+	start := helpers.ToNRGBA(renderer.gradient.StartColor)
+	end := helpers.ToNRGBA(renderer.gradient.EndColor)
+	t := float32(index) / float32(gradientBandCount-1)
+
+	return color.NRGBA{
+		R: blendColorByte(start.R, end.R, t),
+		G: blendColorByte(start.G, end.G, t),
+		B: blendColorByte(start.B, end.B, t),
+		A: blendColorByte(start.A, end.A, t),
+	}
+}
+
+// blendColorByte mixes one color channel
+func blendColorByte(start, end uint8, t float32) uint8 {
+	return uint8(float32(start)*(1-t) + float32(end)*t)
+}

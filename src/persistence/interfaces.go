@@ -6,6 +6,7 @@ import (
 	"godo/src/models"
 )
 
+// TodoRepository describes todo storage operations
 type TodoRepository interface {
 	GetTodosForMonth(year, month int) ([]*models.TodoItem, error)
 	SaveTodosForMonth(year, month int, todos []*models.TodoItem) error
@@ -19,6 +20,7 @@ type TodoRepository interface {
 	MigrateAllToYAML() error
 }
 
+// ConfigRepository describes app config storage
 type ConfigRepository interface {
 	LoadConfig() (*models.Config, error)
 	SaveConfig(config *models.Config) error

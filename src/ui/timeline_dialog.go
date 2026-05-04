@@ -120,7 +120,7 @@ func (t *Timeline) reloadVisibleTodos() {
 	}
 
 	dailyTodos := t.filterCurrentDayTodos(todos)
-	filtered := t.viewMode.FilterItems(dailyTodos, time.Now())
+	filtered := t.viewMode.FilterItems(dailyTodos)
 	models.SortTodosByOrder(filtered)
 
 	t.SetTodos(filtered)
