@@ -217,60 +217,60 @@ Modular by design: UI is separated from business logic. Fyne provides a native-f
 
 ```mermaid
 flowchart TD
-    Start([User opens Go Do]) --> MainWindow[Main Window]
+    Start["User opens Go Do"] --> MainWindow["Main Window"]
 
-    MainWindow --> Action{What do they need to do?}
+    MainWindow --> Action{"What do they need to do?"}
 
-    Action -->|Create a task| ClickPlus[Press the + button]
-    ClickPlus --> AddForm[Task creation form]
-    AddForm --> FillForm[Fill in: title,<br/>date, place, label,<br/>kind, priority,<br/>description, reminder]
-    FillForm --> SaveTask[Press Add]
-    SaveTask --> SaveOnChange[(Save immediately<br/>via TodoRepository)]
+    Action -->|Create a task| ClickPlus["Press the + button"]
+    ClickPlus --> AddForm["Task creation form"]
+    AddForm --> FillForm["Fill in title, date, place,<br/>label, kind, priority,<br/>description, and reminder"]
+    FillForm --> SaveTask["Press Add"]
+    SaveTask --> SaveOnChange["Save immediately<br/>via TodoRepository"]
     SaveOnChange --> MainWindow
 
-    Action -->|Review tasks| ViewTasks[View today's timeline]
-    ViewTasks --> Navigate{Navigate}
-    Navigate -->|Different day| Arrows[Use arrows ← →<br/>to switch ±1 day]
-    Navigate -->|Filter| Filter[Choose mode in ComboBox:<br/>All / Incomplete /<br/>Complete / Important]
+    Action -->|Review tasks| ViewTasks["View today's timeline"]
+    ViewTasks --> Navigate{"Navigate"}
+    Navigate -->|Different day| Arrows["Use arrows left/right<br/>to switch by one day"]
+    Navigate -->|Filter| Filter["Choose mode in ComboBox:<br/>All, Incomplete,<br/>Complete, or Important"]
     Arrows --> MainWindow
     Filter --> MainWindow
 
-    Action -->|Mark important| ClickStar[Click the ⭐<br/>on a task row]
-    ClickStar --> Starred[Task marked<br/>as important]
+    Action -->|Mark important| ClickStar["Click the star<br/>on a task row"]
+    ClickStar --> Starred["Task marked<br/>as important"]
     Starred --> SaveOnChange
 
-    Action -->|Complete a task| ClickCheck[Click the checkbox ☐<br/>on a task row]
-    ClickCheck --> Completed[Task marked ✓<br/>as done]
+    Action -->|Complete a task| ClickCheck["Click the checkbox<br/>on a task row"]
+    ClickCheck --> Completed["Task marked<br/>as done"]
     Completed --> SaveOnChange
 
-    Action -->|Reorder tasks| DragTask[Drag a task row<br/>up or down with the mouse]
-    DragTask --> Reordered[Task order updated]
+    Action -->|Reorder tasks| DragTask["Drag a task row<br/>up or down with the mouse"]
+    DragTask --> Reordered["Task order updated"]
     Reordered --> SaveOnChange
 
-    Action -->|Use Pomodoro| ClickPomodoro[Click<br/>Pomodoro]
-    ClickPomodoro --> PomodoroWindow[Pomodoro timer window]
-    PomodoroWindow --> ConfigPomodoro[Configure via PomodoroConfig:<br/>- Work time (default 25m)<br/>- Short break (5m)<br/>- Long break (15m)]
-    ConfigPomodoro --> StartTimer[Press Start]
-    StartTimer --> WorkSession[Focus on the task]
-    WorkSession --> TimerControls{Control timer}
-    TimerControls -->|Pause| Pause[Pause]
-    TimerControls -->|Reset| Reset[Reset to Ready]
-    TimerControls -->|Work period finishes| Break[Short/long break]
-    TimerControls -->|Break finishes| NextSession{Start another session?}
-    Pause --> Resume[Press Resume]
+    Action -->|Use Pomodoro| ClickPomodoro["Click Pomodoro"]
+    ClickPomodoro --> PomodoroWindow["Pomodoro timer window"]
+    PomodoroWindow --> ConfigPomodoro["Configure Pomodoro:<br/>work time default 25m,<br/>short break 5m,<br/>long break 15m"]
+    ConfigPomodoro --> StartTimer["Press Start"]
+    StartTimer --> WorkSession["Focus on the task"]
+    WorkSession --> TimerControls{"Control timer"}
+    TimerControls -->|Pause| Pause["Pause"]
+    TimerControls -->|Reset| Reset["Reset to Ready"]
+    TimerControls -->|Work period finishes| Break["Short or long break"]
+    TimerControls -->|Break finishes| NextSession{"Start another session?"}
+    Pause --> Resume["Press Resume"]
     Resume --> TimerControls
     Reset --> StartTimer
     Break --> TimerControls
     NextSession -->|Yes| StartTimer
-    NextSession -->|No| ClosePomodoro[Close window]
+    NextSession -->|No| ClosePomodoro["Close window"]
     ClosePomodoro --> MainWindow
 
-    Action -->|Toggle theme| ClickTheme[Press<br/>Light/Dark]
-    ClickTheme --> ToggleTheme[Switch theme]
+    Action -->|Toggle theme| ClickTheme["Press Light/Dark"]
+    ClickTheme --> ToggleTheme["Switch theme"]
     ToggleTheme --> MainWindow
 
-    MainWindow --> Exit{Close the app?}
-    Exit -->|Yes| End([Done — data already on disk])
+    MainWindow --> Exit{"Close the app?"}
+    Exit -->|Yes| End["Done: data already on disk"]
     Exit -->|No| Action
 
     style Start fill:#667eea,stroke:#333,stroke-width:3px,color:#fff
