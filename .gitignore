@@ -349,6 +349,8 @@ build/
 styles/
 
 # Local editor/agent folders
+AGENTS.md
+CLAUDE.md
 /.vscode/
 /.claude/
 /.cursor/
