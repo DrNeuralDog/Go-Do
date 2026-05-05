@@ -351,6 +351,7 @@ styles/
 # Local editor/agent folders
 AGENTS.md
 CLAUDE.md
+repomix-output.xml
 /.vscode/
 /.claude/
 /.cursor/
